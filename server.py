@@ -317,3 +317,26 @@ class AnimationHandler(BaseHTTPRequestHandler):
                 current_time = get_minsk_time()
 
                 info_block = (
+f"  {CYAN}✈ Telegram:{RESET}  {BOLD}@ImBOSS_No1{RESET}  (t.me/ImBOSS_No1)\n"
+f"  {MAGENTA}♪ TikTok:{RESET}    {BOLD}@derev_everyday{RESET}\n"
+f"  {YELLOW}₿ Bitcoin:{RESET}   {BOLD}{btc}{RESET}\n"
+f"  {GREEN}⌚ Время BY:{RESET}  {current_time}\n"
+)
+frame = (
+"\033[2J\033[H"
+f"{color}{LOGO}{RESET}\n"
+f"{earth}\n\n"
+f"{info_block}"
+f"{footer}"
+)
+self.wfile.write(frame.encode("utf-8"))
+self.wfile.flush()
+step += 1
+time.sleep(0.12)
+except (BrokenPipeError, ConnectionResetError):
+pass
+if name == "main":
+port = int(os.environ.get("PORT", 8080))
+server = ThreadingHTTPServer(("0.0.0.0", port), AnimationHandler)
+print(f"Server started on port {port}")
+server.serve_forever()

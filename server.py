@@ -1,6 +1,7 @@
 
 import json
 import math
+import mimetypes
 import os
 import threading
 import time
@@ -50,6 +51,26 @@ BLUE = "\033[94m"
 MAGENTA = "\033[95m"
 LOGO_COLORS = ["\033[96m", "\033[94m", "\033[95m", "\033[36m"]
 SHADE = " .:-=+*#%@"
+ 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+AUDIO_EXT = (".mp3", ".ogg", ".wav", ".m4a", ".opus", ".flac")
+ 
+ 
+def find_music():
+    """Трек для фона: MUSIC_FILE, затем baldinini*.mp3, затем любой аудиофайл рядом со скриптом."""
+    env = os.environ.get("MUSIC_FILE")
+    if env and os.path.isfile(env):
+        return env
+    try:
+        names = sorted(os.listdir(BASE_DIR))
+    except OSError:
+        return None
+    pref = [n for n in names if n.lower().startswith("baldinini") and n.lower().endswith(AUDIO_EXT)]
+    other = [n for n in names if n.lower().endswith(AUDIO_EXT)]
+    for n in pref + other:
+        return os.path.join(BASE_DIR, n)
+    return None
+ 
  
 # ---------------------------------------------------------------- BTC ----
 BTC = {"price": None, "updated": 0.0}
@@ -257,7 +278,7 @@ HTML = r"""<!DOCTYPE html>
   </div>
  
   <div class="player">
-    <div class="np"><span>♪ <b>MANERA — live synthwave</b></span><span id="state">пауза</span></div>
+    <div class="np"><span>♪ <b id="np-title">MANERA — live synthwave</b></span><span id="state">пауза</span></div>
     <canvas id="eq" width="520" height="56"></canvas>
     <div class="ctrl">
       <button class="pbtn" id="play" title="Играть / пауза">▶</button>
@@ -268,6 +289,7 @@ HTML = r"""<!DOCTYPE html>
   <div class="foot">музыка генерируется прямо в браузере · <code>curl</code> в терминале тоже даёт анимацию</div>
 </div></div></div>
  
+<audio id="track" loop preload="auto"></audio>
 <script>
 const worldMap = __MAP__;
 const $ = id => document.getElementById(id);
@@ -329,11 +351,45 @@ type();
 /* ---------- фон: звёзды + след курсора + клики ---------- */
 const cv = $("fx"), cx = cv.getContext("2d");
 let stars = [], parts = [], mx = 0, my = 0, pmx = 0, pmy = 0;
+ 
+/* ---------- «матричный» дождь из иероглифов ---------- */
+const GLY = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ日月火水木金土0123456789";
+const FS = 16;
+let cols = [];
+const rg = () => GLY[(Math.random() * GLY.length) | 0];
+function newCol(x, y) {
+  return { x, y, sp: .12 + Math.random() * .3, len: 8 + ((Math.random() * 20) | 0),
+           ch: Array.from({ length: 64 }, rg) };
+}
+function initRain() {
+  const n = Math.ceil(cv.width / FS);
+  cols = Array.from({ length: n }, (_, i) => newCol(i * FS, -Math.random() * cv.height / FS));
+}
+function drawRain() {
+  const rows = cv.height / FS;
+  cx.font = FS + "px monospace"; cx.textBaseline = "top";
+  for (const c of cols) {
+    c.y += c.sp * (1 + bass * 2.5);
+    const head = Math.floor(c.y);
+    if (head - c.len > rows) { Object.assign(c, newCol(c.x, -Math.random() * rows * .5)); continue; }
+    if (Math.random() < .05) c.ch[(Math.random() * 64) | 0] = rg();
+    for (let k = 0; k < c.len; k++) {
+      const row = head - k;
+      if (row < 0 || row > rows) continue;
+      cx.globalAlpha = k === 0 ? .95 : .5 * (1 - k / c.len);
+      cx.fillStyle = k === 0 ? "#eafff3" : (k < 3 ? "#5dffa0" : "#12b45a");
+      cx.fillText(c.ch[((row % 64) + 64) % 64], c.x, row * FS);
+    }
+  }
+  cx.globalAlpha = 1;
+}
+ 
 function resize() {
   cv.width = innerWidth; cv.height = innerHeight;
   stars = Array.from({ length: Math.min(260, Math.floor(cv.width * cv.height / 7000)) }, () => ({
     x: Math.random() * cv.width, y: Math.random() * cv.height,
     z: Math.random() * 1.6 + .3, p: Math.random() * 6.28 }));
+  initRain();
 }
 addEventListener("resize", resize); resize();
 const hues = [185, 270, 330];
@@ -353,6 +409,7 @@ addEventListener("pointerdown", e => burst(e.clientX, e.clientY, 26, 4.5));
 let bass = 0;
 (function loop(t) {
   cx.clearRect(0, 0, cv.width, cv.height);
+  drawRain();
   const ox = (mx - cv.width / 2) * .012, oy = (my - cv.height / 2) * .012;
   for (const s of stars) {
     s.y += s.z * (.15 + bass * 1.2); if (s.y > cv.height) { s.y = 0; s.x = Math.random() * cv.width; }
@@ -373,7 +430,10 @@ let bass = 0;
  
 /* ---------- музыка (Web Audio, синтез в реальном времени) ---------- */
 let ac, master, bus, dbus, analyser, noiseBuf, schedTimer, playing = false, started = false;
-let vol = .55, nextBar = 0, barIdx = 0;
+let vol = .55, nextBar = 0, barIdx = 0, useFile = false, mediaSrc = null;
+const musicReady = fetch("/api/music", { cache: "no-store" }).then(r => r.json()).then(j => {
+  if (j.has) { useFile = true; $("track").src = "/music"; $("np-title").textContent = j.title.toUpperCase(); }
+}).catch(() => {});
 const BPM = 96, beat = 60 / BPM, bar = beat * 4;
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const PADS = [[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62]];
@@ -448,13 +508,17 @@ function initAudio() {
   bus = ac.createGain(); dbus = ac.createGain();
   bus.connect(conv); bus.connect(comp); conv.connect(wet); wet.connect(comp); dbus.connect(comp);
   comp.connect(master); master.connect(analyser); analyser.connect(ac.destination);
+  mediaSrc = ac.createMediaElementSource($("track")); mediaSrc.connect(dbus);
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
   const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 }
 function play() {
   initAudio(); ac.resume();
-  if (!started) { nextBar = ac.currentTime + .15; started = true; }
-  clearInterval(schedTimer); schedTimer = setInterval(sched, 250); sched();
+  if (useFile) { $("track").play().catch(() => {}); }
+  else {
+    if (!started) { nextBar = ac.currentTime + .15; started = true; }
+    clearInterval(schedTimer); schedTimer = setInterval(sched, 250); sched();
+  }
   master.gain.cancelScheduledValues(ac.currentTime);
   master.gain.setValueAtTime(master.gain.value, ac.currentTime);
   master.gain.linearRampToValueAtTime(vol, ac.currentTime + 2.5);
@@ -466,7 +530,7 @@ function pause() {
   master.gain.setValueAtTime(master.gain.value, ac.currentTime);
   master.gain.linearRampToValueAtTime(0, ac.currentTime + .6);
   clearInterval(schedTimer);
-  setTimeout(() => { if (!playing) { ac.suspend(); started = false; } }, 800);
+  setTimeout(() => { if (!playing) { $("track").pause(); ac.suspend(); started = false; } }, 800);
   playing = false; $("play").textContent = "▶"; $("state").textContent = "пауза";
 }
 $("play").onclick = () => playing ? pause() : play();
@@ -502,7 +566,7 @@ function enter(withSound) {
   document.body.classList.remove("locked");
   setTimeout(() => document.body.classList.add("in"), 150);
   burst(innerWidth / 2, innerHeight / 2, 80, 7);
-  if (withSound) play();
+  if (withSound) { initAudio(); ac.resume(); musicReady.then(play); }
 }
 $("intro").addEventListener("click", e => { if (e.target.id !== "mute-enter") enter(true); });
 $("mute-enter").addEventListener("click", e => { e.stopPropagation(); enter(false); });
@@ -534,6 +598,46 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
  
+    def _serve_music(self):
+        f = find_music()
+        if not f:
+            return self._send(404, "text/plain", "no music file")
+        size = os.path.getsize(f)
+        start, end, code = 0, size - 1, 200
+        rng = self.headers.get("Range", "")
+        if rng.startswith("bytes="):
+            a, _, b = rng[6:].partition("-")
+            try:
+                start = int(a) if a else 0
+                end = int(b) if b else size - 1
+                code = 206
+            except ValueError:
+                start, end, code = 0, size - 1, 200
+        end = min(end, size - 1)
+        if start > end:
+            return self._send(416, "text/plain", "bad range")
+        ctype = mimetypes.guess_type(f)[0] or "audio/mpeg"
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if code == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.end_headers()
+        try:
+            with open(f, "rb") as fh:
+                fh.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = fh.read(min(65536, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+ 
     def do_GET(self):
         path = self.path.split("?")[0]
  
@@ -541,6 +645,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, "text/plain", "ok")
         if path == "/api/btc":
             return self._send(200, "application/json", json.dumps({"text": btc_text()}))
+        if path == "/api/music":
+            f = find_music()
+            title = os.path.splitext(os.path.basename(f))[0] if f else ""
+            return self._send(200, "application/json",
+                              json.dumps({"has": bool(f), "title": title}, ensure_ascii=False))
+        if path == "/music":
+            return self._serve_music()
         if path != "/":
             return self._send(404, "text/plain; charset=utf-8", "404 not found")
  

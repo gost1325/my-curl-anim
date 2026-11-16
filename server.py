@@ -21,14 +21,14 @@ WORLD_MAP = [
     "0000011110000000011000001111111110000000",
     "0001111111100000111100111111111111110000",
     "0000111111000000011001111111111111110000",
-    "0000011110000000000001111111111111110000",
-    "0000001100000000000011111111111100000000",
-    "0000000110000000000111111111110000000000",
-    "0000000011100000000111111110000000000000",
-    "0000000011111000000111111110000000000000",
-    "0000000001111100000011111110000000111000",
-    "0000000001111100000011110000000001111100",
-    "0000000000110000000000100000000000111000",
+    "0000111100000000000011111111111100000000",
+    "0000011000000000000111111111111000000000",
+    "0000001100000000001111111111100000000000",
+    "0000000011100000001111111100000000000000",
+    "0000000011111000001111111100000000000000",
+    "0000000001111100000111111000000011100000",
+    "0000000001111000000111100000000011111000",
+    "0000000000110000000001000000000001110000",
     "0000000000100000000000000000000000000000",
     "0000000000000000000000000000000000000000",
 ]
@@ -110,7 +110,6 @@ def get_minsk_time():
 
 
 def get_web_html(btc):
-    """Возвращает красивую веб-страницу терминала для открытия в Telegram и браузере."""
     return f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -288,7 +287,6 @@ class AnimationHandler(BaseHTTPRequestHandler):
         user_agent = self.headers.get("User-Agent", "").lower()
         btc = get_btc_price()
 
-        # Если открыли через браузер или нажали кнопку в Telegram — отдаём веб-терминал
         if "curl" not in user_agent:
             html = get_web_html(btc)
             self.send_response(200)
@@ -297,7 +295,6 @@ class AnimationHandler(BaseHTTPRequestHandler):
             self.wfile.write(html.encode("utf-8"))
             return
 
-        # Если запустили через curl в CMD — отдаём консольную анимацию
         self.send_response(200)
         self.send_header("Content-type", "text/plain; charset=utf-8")
         self.end_headers()
@@ -317,10 +314,10 @@ class AnimationHandler(BaseHTTPRequestHandler):
                 current_time = get_minsk_time()
 
                 info_block = (
-f"  {CYAN}✈ Telegram:{RESET}  {BOLD}@ImBOSS_No1{RESET}  (t.me/ImBOSS_No1)\n"
-f"  {MAGENTA}♪ TikTok:{RESET}    {BOLD}@derev_everyday{RESET}\n"
-f"  {YELLOW}₿ Bitcoin:{RESET}   {BOLD}{btc}{RESET}\n"
-f"  {GREEN}⌚ Время BY:{RESET}  {current_time}\n"
+                    f"  {CYAN}✈ Telegram:{RESET}  {BOLD}@ImBOSS_No1{RESET}  (t.me/ImBOSS_No1)\n"
+                    f"  {MAGENTA}♪ TikTok:{RESET}    {BOLD}@derev_everyday{RESET}\n"
+                    f"  {YELLOW}₿ Bitcoin:{RESET}   {BOLD}{btc}{RESET}\n"
+                    f"  {GREEN}⌚ Время BY:{RESET}  {current_time}\n"
 )
 frame = (
 "\033[2J\033[H"

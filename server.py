@@ -1,6 +1,7 @@
 import os
 import ssl
 import time
+import math
 import json
 import urllib.request
 from datetime import datetime, timezone, timedelta
@@ -15,68 +16,22 @@ LOGO = r"""
 |_|  |_/_/   \_\_| \_|_____|_| \_\/_/   \_\
 """
 
-# Кадры вращающейся Земли
-EARTH_FRAMES = [
-    r"""
-        .---.
-      .'   _ '.
-     /   .' '. \
-
-    |   |     | |
-    |    '._.'  |
-     \         /
-      '._____.'
-    """,
-    r"""
-        .---.
-      .'  _  '.
-     /  .' '.  \
-
-    |  |     |  |
-    |   '._.'   |
-     \         /
-      '._____.'
-    """,
-    r"""
-        .---.
-      .' _   '.
-     / .' '.   \
-
-    | |     |   |
-    |  '._.'    |
-     \         /
-      '._____.'
-    """,
-    r"""
-        .---.
-      .'     '.
-     / '.   .' \
-
-    |    | |    |
-    |   .' '.   |
-     \         /
-      '._____.'
-    """,
-    r"""
-        .---.
-      .'     '.
-     /   .---. \
-
-    |   /     \ |
-    |   \     / |
-     \   '---' /
-      '._____.'
-    """,
-    r"""
-        .---.
-      .'     '.
-     / .---.   \
-
-    | /     \   |
-    | \     /   |
-     \ '---'   /
-      '._____.'
-    """
+# Карта мира для наложения на 3D-сферу (1 - суша, 0 - океан)
+WORLD_MAP = [
+    "0000000000000000000000000000000000000000",
+    "0000011110000000011000001111111110000000",
+    "0001111111100000111100111111111111110000",
+    "0000111111000000011001111111111111110000",
+    "0000011110000000000001111111111111000000",
+    "0000001100000000000011111111111100000000",
+    "0000000110000000000111111111110000000000",
+    "0000000011100000000111111110000000000000",
+    "0000000011111000000011111100000000000000",
+    "0000000001111100000001111000000011100000",
+    "0000000001111000000001110000000111110000",
+    "0000000000110000000000100000000011100000",
+    "0000000000100000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
 ]
 
 COLORS = ["\033[96m", "\033[94m", "\033[95m", "\033[36m"]
@@ -86,10 +41,57 @@ DIM = "\033[2m"
 CYAN = "\033[96m"
 YELLOW = "\033[93m"
 GREEN = "\033[92m"
+BLUE = "\033[94m"
 MAGENTA = "\033[95m"
 
 CACHE = {"btc": "загрузка...", "updated": 0}
 SSL_CONTEXT = ssl._create_unverified_context()
+
+
+def render_earth(angle):
+    """Генерирует красивый 3D-шар Земли с синими океанами и зелёными материками."""
+    radius = 7
+    shade_chars = " .:-=+*#%@"
+    map_h = len(WORLD_MAP)
+    map_w = len(WORLD_MAP[0])
+    lines = []
+
+    for y in range(-radius, radius + 1):
+        row = ["      "]  # Отступ слева для центрирования под логотипом
+        # Корректировка пропорций шрифта терминала (символы выше, чем шире)
+        ny = y / radius
+        for x in range(-radius * 2, radius * 2 + 1):
+            nx = x / (radius * 2)
+            r2 = nx * nx + ny * ny
+            if r2 <= 1.0:
+                nz = math.sqrt(1.0 - r2)
+
+                # Сферические координаты (широта и долгота) с учётом поворота
+                lat = math.asin(max(-1.0, min(1.0, ny)))
+                lon = math.atan2(nx, nz) + angle
+
+                # Перевод координат в индекс на карте мира
+                u = (lon / (2 * math.pi)) % 1.0
+                v = (lat / math.pi) + 0.5
+                mx = int(u * map_w) % map_w
+                my = min(map_h - 1, max(0, int(v * map_h)))
+                is_land = WORLD_MAP[my][mx] == "1"
+
+                # Расчёт освещения (источник света спереди-слева-сверху)
+                light = nx * -0.4 + ny * -0.3 + nz * 0.85
+                light = max(0.15, min(1.0, light))
+                char_idx = int(light * (len(shade_chars) - 1))
+                ch = shade_chars[char_idx]
+
+                if is_land:
+                    row.append(f"{GREEN}{BOLD}{ch}{RESET}")
+                else:
+                    row.append(f"{BLUE}{ch}{RESET}")
+            else:
+                row.append(" ")
+        lines.append("".join(row))
+
+    return "\n".join(lines)
 
 
 def get_btc_price():
@@ -115,7 +117,6 @@ def get_btc_price():
 
 
 def get_minsk_time():
-    # Минское время (UTC+3)
     tz_minsk = timezone(timedelta(hours=3))
     return datetime.now(tz_minsk).strftime("%H:%M:%S")
 
@@ -133,6 +134,8 @@ class AnimationHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/plain; charset=utf-8")
         self.end_headers()
 
+        # Предварительно рендерим 36 кадров плавного оборота Земли для быстрой работы
+        earth_frames = [render_earth(i * (2 * math.pi / 36)) for i in range(36)]
         btc = get_btc_price()
 
         footer = (
@@ -144,8 +147,8 @@ class AnimationHandler(BaseHTTPRequestHandler):
         step = 0
         try:
             while True:
-                color = COLORS[step % len(COLORS)]
-                earth = EARTH_FRAMES[step % len(EARTH_FRAMES)]
+                color = COLORS[(step // 3) % len(COLORS)]
+                earth = earth_frames[step % len(earth_frames)]
                 current_time = get_minsk_time()
 
                 info_block = (
@@ -157,8 +160,8 @@ class AnimationHandler(BaseHTTPRequestHandler):
 
                 frame = (
                     "\033[2J\033[H"
-                    f"{color}{LOGO}{RESET}"
-                    f"{CYAN}{earth}{RESET}\n"
+                    f"{color}{LOGO}{RESET}\n"
+                    f"{earth}\n\n"
                     f"{info_block}"
                     f"{footer}"
                 )
@@ -166,7 +169,7 @@ class AnimationHandler(BaseHTTPRequestHandler):
                 self.wfile.write(frame.encode("utf-8"))
                 self.wfile.flush()
                 step += 1
-                time.sleep(0.35)
+                time.sleep(0.12)
         except (BrokenPipeError, ConnectionResetError):
             pass
 
@@ -176,4 +179,3 @@ if __name__ == "__main__":
     server = ThreadingHTTPServer(("0.0.0.0", port), AnimationHandler)
     print(f"Server started on port {port}")
     server.serve_forever()
-

@@ -173,19 +173,21 @@ HTML = r"""<!DOCTYPE html>
   /* ---------- заставка ---------- */
   #intro { position:fixed; inset:0; z-index:100; display:flex; flex-direction:column;
            justify-content:center; align-items:center; gap:22px; background:#05070d;
-           transition:opacity .9s ease, visibility .9s; cursor:pointer; text-align:center; padding:20px; }
-  #intro.gone { opacity:0; visibility:hidden; }
+           transition:opacity .9s ease, visibility .9s; cursor:pointer; text-align:center; padding:20px;
+           touch-action:manipulation; }
+  #intro.gone { opacity:0; visibility:hidden; pointer-events:none; }
   .glitch { position:relative; font-size:clamp(46px,14vw,110px); font-weight:bold; letter-spacing:.12em;
-            color:#fff; text-shadow:0 0 24px #39d0e088; }
+            color:#fff; text-shadow:0 0 24px #39d0e088; pointer-events:none; }
   .glitch::before,.glitch::after { content:attr(data-text); position:absolute; inset:0; overflow:hidden; }
   .glitch::before { color:#ff3d81; transform:translate(3px,0); clip-path:inset(0 0 55% 0); animation:gl1 2.4s infinite steps(1); }
   .glitch::after  { color:#39d0e0; transform:translate(-3px,0); clip-path:inset(55% 0 0 0); animation:gl2 2.1s infinite steps(1); }
   @keyframes gl1 { 0%{transform:translate(3px,0)} 20%{transform:translate(-4px,1px)} 40%{transform:translate(2px,-1px)} 60%{transform:translate(-2px,0)} 80%{transform:translate(5px,1px)} }
   @keyframes gl2 { 0%{transform:translate(-3px,0)} 25%{transform:translate(4px,-1px)} 50%{transform:translate(-5px,1px)} 75%{transform:translate(2px,0)} }
-  .enter { color:var(--cy); font-size:16px; letter-spacing:.2em; animation:pulse 1.6s ease-in-out infinite; }
+  .enter { color:var(--cy); font-size:16px; letter-spacing:.2em; animation:pulse 1.6s ease-in-out infinite;
+           pointer-events:none; }
   @keyframes pulse { 50% { opacity:.35; } }
   .silent { color:var(--mut); font-size:12px; text-decoration:underline; background:none; border:0;
-            font-family:inherit; cursor:pointer; padding:6px; }
+            font-family:inherit; cursor:pointer; padding:6px; position:relative; z-index:2; }
   .silent:hover { color:var(--txt); }
  
   /* ---------- карточка ---------- */
@@ -256,7 +258,7 @@ HTML = r"""<!DOCTYPE html>
 <div id="intro">
   <div class="glitch" data-text="MANERA">MANERA</div>
   <div class="enter">[ НАЖМИ, ЧТОБЫ ВОЙТИ ]</div>
-  <button class="silent" id="mute-enter">войти без звука</button>
+  <button class="silent" id="mute-enter" type="button">войти без звука</button>
 </div>
  
 <div class="wrap"><div class="tilt" id="tilt"><div class="terminal">
@@ -402,7 +404,7 @@ addEventListener("pointermove", e => {
   pmx = mx; pmy = my; mx = e.clientX; my = e.clientY;
   burst(mx, my, 1, .8);
   const tl = $("tilt");
-  tl.style.transform = `rotateX(${((my / innerHeight) - .5) * -9}deg) rotateY(${((mx / innerWidth) - .5) * 11}deg)`;
+  if (tl) tl.style.transform = `rotateX(${((my / innerHeight) - .5) * -9}deg) rotateY(${((mx / innerWidth) - .5) * 11}deg)`;
 });
 addEventListener("pointerdown", e => burst(e.clientX, e.clientY, 26, 4.5));
 let bass = 0;
@@ -498,21 +500,31 @@ function sched() {
 }
 function initAudio() {
   if (ac) return;
-  ac = new (window.AudioContext || window.webkitAudioContext)();
-  const comp = ac.createDynamicsCompressor();
-  master = ac.createGain(); master.gain.value = 0;
-  analyser = ac.createAnalyser(); analyser.fftSize = 128; analyser.smoothingTimeConstant = .8;
-  const conv = ac.createConvolver(); conv.buffer = impulse(2.8);
-  const wet = ac.createGain(); wet.gain.value = .45;
-  bus = ac.createGain(); dbus = ac.createGain();
-  bus.connect(conv); bus.connect(comp); conv.connect(wet); wet.connect(comp); dbus.connect(comp);
-  comp.connect(master); master.connect(analyser); analyser.connect(ac.destination);
-  mediaSrc = ac.createMediaElementSource($("track")); mediaSrc.connect(dbus);
-  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) { console.warn("WebAudio недоступен"); return; }
+  try {
+    ac = new Ctx();
+    const comp = ac.createDynamicsCompressor();
+    master = ac.createGain(); master.gain.value = 0;
+    analyser = ac.createAnalyser(); analyser.fftSize = 128; analyser.smoothingTimeConstant = .8;
+    const conv = ac.createConvolver(); conv.buffer = impulse(2.8);
+    const wet = ac.createGain(); wet.gain.value = .45;
+    bus = ac.createGain(); dbus = ac.createGain();
+    bus.connect(conv); bus.connect(comp); conv.connect(wet); wet.connect(comp); dbus.connect(comp);
+    comp.connect(master); master.connect(analyser); analyser.connect(ac.destination);
+    try {
+      mediaSrc = ac.createMediaElementSource($("track"));
+      mediaSrc.connect(dbus);
+    } catch (e) { console.warn("media source skip", e); }
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  } catch (e) { console.error("audio init error", e); ac = null; }
 }
 function play() {
-  initAudio(); ac.resume();
+  initAudio();
+  if (!ac) return;
+  ac.resume();
   if (useFile) { $("track").play().catch(() => {}); }
   else {
     if (!started) { nextBar = ac.currentTime + .15; started = true; }
@@ -560,16 +572,42 @@ function drawEq(t) {
 }
  
 /* ---------- вход ---------- */
+let entered = false;
 function enter(withSound) {
-  $("intro").classList.add("gone");
-  document.body.classList.remove("locked");
-  setTimeout(() => document.body.classList.add("in"), 150);
-  burst(innerWidth / 2, innerHeight / 2, 80, 7);
-  if (withSound) { initAudio(); ac.resume(); musicReady.then(play); }
+  if (entered) return;
+  entered = true;
+  try {
+    $("intro").classList.add("gone");
+    document.body.classList.remove("locked");
+    setTimeout(() => document.body.classList.add("in"), 150);
+    burst(innerWidth / 2, innerHeight / 2, 80, 7);
+  } catch (err) { console.error(err); }
+  if (withSound) {
+    try {
+      initAudio();
+      if (ac) ac.resume();
+      musicReady.then(() => { try { play(); } catch (e) { console.error(e); } });
+    } catch (e) { console.error("audio init failed", e); }
+  }
 }
-$("intro").addEventListener("click", e => { if (e.target.id !== "mute-enter") enter(true); });
-$("mute-enter").addEventListener("click", e => { e.stopPropagation(); enter(false); });
-document.addEventListener("visibilitychange", () => { if (ac && playing) { document.hidden ? ac.suspend() : ac.resume(); } });
+const introEl = $("intro");
+const muteEl = $("mute-enter");
+function onEnter(e) {
+  if (e && e.target && e.target.id === "mute-enter") return;
+  if (e && e.cancelable) e.preventDefault();
+  enter(true);
+}
+function onMute(e) {
+  if (e) { if (e.cancelable) e.preventDefault(); e.stopPropagation(); }
+  enter(false);
+}
+["click", "pointerdown", "touchstart"].forEach(ev => {
+  introEl.addEventListener(ev, onEnter, { passive: false });
+  muteEl.addEventListener(ev, onMute, { passive: false });
+});
+document.addEventListener("visibilitychange", () => {
+  if (ac && playing) { document.hidden ? ac.suspend() : ac.resume(); }
+});
 </script>
 </body>
 </html>"""

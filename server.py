@@ -1,10 +1,10 @@
 import os
+import ssl
 import time
 import json
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# Красивый ASCII-логотип MANERA
 LOGO = r"""
  __  __    _    _   _ _____ ____      _    
 
@@ -14,61 +14,79 @@ LOGO = r"""
 |_|  |_/_/   \_\_| \_|_____|_| \_\/_/   \_\
 """
 
-# Цвета для анимации логотипа (голубой, синий, фиолетовый, бирюзовый)
 COLORS = ["\033[96m", "\033[94m", "\033[95m", "\033[36m"]
 RESET = "\033[0m"
-DIM = "\033[2m"      # Тусклый / мелкий вид в терминале
+DIM = "\033[2m"
 YELLOW = "\033[93m"
 GREEN = "\033[92m"
 
-# Кэш для данных, чтобы не нагружать API при каждом кадре
 CACHE = {"data": None, "updated": 0}
+
+# Отключаем строгую проверку SSL для стабильной работы на облачных серверах
+SSL_CONTEXT = ssl._create_unverified_context()
+
+# Расшифровка кодов погоды Open-Meteo
+WEATHER_CODES = {
+    0: "Ясно", 1: "Преимущественно ясно", 2: "Переменная облачность", 3: "Пасмурно",
+    45: "Туман", 48: "Изморозь", 51: "Легкая морось", 53: "Морось", 55: "Сильная морось",
+    61: "Небольшой дождь", 63: "Дождь", 65: "Сильный дождь",
+    71: "Небольшой снег", 73: "Снег", 75: "Сильный снег", 77: "Снежные зерна",
+    80: "Ливень", 81: "Сильный ливень", 85: "Снегопад", 95: "Гроза"
+}
+
+
+def fetch_json(url):
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    )
+    with urllib.request.urlopen(req, timeout=8, context=SSL_CONTEXT) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
 def get_live_info():
     now = time.time()
-    # Обновляем погоду и курсы раз в 5 минут (300 секунд)
     if CACHE["data"] and (now - CACHE["updated"] < 300):
         return CACHE["data"]
 
-    # 1. Погода в Миорах (Беларусь)
-    weather = "н/д"
+    # 1. Погода строго по координатам г. Миоры (55.6222, 27.6281) через Open-Meteo
+    weather = "недоступно"
     try:
-        req = urllib.request.Request(
-            "https://wttr.in",
-            headers={"User-Agent": "curl/7.81.0"}
+        w_url = (
+            "https://open-meteo.com"
+            "?latitude=55.6222&longitude=27.6281&current_weather=true&windspeed_unit=ms"
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            weather = resp.read().decode("utf-8").strip()
+        w_data = fetch_json(w_url)
+        cw = w_data["current_weather"]
+        temp = cw["temperature"]
+        wind = cw["windspeed"]
+        desc = WEATHER_CODES.get(cw["weathercode"], "")
+        sign = "+" if temp > 0 else ""
+        weather = f"{sign}{temp}°C, {desc}, ветер {wind} м/с"
     except Exception:
-        weather = "не удалось загрузить"
+        weather = "ошибка загрузки"
 
-    # 2. Официальный курс USD к BYN (API Нацбанка РБ)
-    usd_byn = "н/д"
+    # 2. Курс USD к BYN (через Open Exchange Rates API, работает из любой страны)
+    usd_byn = "недоступно"
     try:
-        with urllib.request.urlopen("https://nbrb.by", timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            usd_byn = f"{data['Cur_OfficialRate']} BYN"
+        r_data = fetch_json("https://er-api.com")
+        rate = r_data["rates"]["BYN"]
+        usd_byn = f"{rate:.4f} BYN"
     except Exception:
         usd_byn = "ошибка загрузки"
 
-    # 3. Курс Bitcoin (CoinGecko API)
-    btc_usd = "н/д"
+    # 3. Курс Bitcoin в USD (через API Coinbase, без лимитов на IP Render)
+    btc_usd = "недоступно"
     try:
-        req = urllib.request.Request(
-            "https://coingecko.com",
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            price = data["bitcoin"]["usd"]
-            btc_usd = f"${price:,.0f}".replace(",", " ")
+        b_data = fetch_json("https://coinbase.com")
+        price = float(b_data["data"]["amount"])
+        btc_usd = f"${price:,.0f}".replace(",", " ")
     except Exception:
         btc_usd = "ошибка загрузки"
 
     result = (
         f"{YELLOW}📍 Погода (Миоры, BY):{RESET} {weather}\n"
-        f"{GREEN}💵 Курс USD (НБРБ):{RESET}    {usd_byn}\n"
+        f"{GREEN}💵 Курс USD / BYN:{RESET}     {usd_byn}\n"
         f"{YELLOW}₿  Bitcoin (BTC):{RESET}      {btc_usd}\n"
     )
     CACHE["data"] = result

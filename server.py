@@ -280,7 +280,7 @@ HTML = r"""<!DOCTYPE html>
       <span id="volv" style="font-size:11px;color:var(--mut);width:34px;text-align:right">55%</span>
     </div>
   </div>
-  <div class="foot">музыка генерируется прямо в браузере · <code>curl</code> в терминале тоже даёт анимацию</div>
+  <div class="foot" id="foot">музыка генерируется прямо в браузере · <code>curl</code> в терминале тоже даёт анимацию</div>
 </div></div></div>
  
 <audio id="track" loop preload="auto"></audio>
@@ -429,6 +429,7 @@ let ac, master, bus, dbus, analyser, noiseBuf, schedTimer, playing = false, star
 let vol = .55, nextBar = 0, barIdx = 0, useFile = false, mediaSrc = null;
 const musicReady = fetch("/api/music", { cache: "no-store" }).then(r => r.json()).then(j => {
   if (j.has) { useFile = true; $("track").src = "/music"; $("np-title").textContent = j.title.toUpperCase(); }
+  else { $("foot").innerHTML = "трек не найден: положи <b>baldinini.mp3</b> рядом со server.py — пока играет синтвейв"; }
 }).catch(() => {});
 const BPM = 96, beat = 60 / BPM, bar = beat * 4;
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -493,6 +494,15 @@ function playBar(t, i) {
 function sched() {
   while (nextBar < ac.currentTime + 1.4) { playBar(nextBar, barIdx % 4); nextBar += bar; barIdx++; }
 }
+function fileFailed(why) {
+  if (!useFile) return;
+  useFile = false;
+  $("np-title").textContent = "MANERA — live synthwave";
+  $("foot").textContent = "файл трека не воспроизводится (" + why + ") — играет синтвейв";
+  if (playing) { started = false; play(); }
+}
+$("track").addEventListener("error", () => fileFailed("формат/повреждён"));
+ 
 function initAudio() {
   if (ac) return;
   ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -510,7 +520,7 @@ function initAudio() {
 }
 function play() {
   initAudio(); ac.resume();
-  if (useFile) { $("track").play().catch(() => {}); }
+  if (useFile) { $("track").play().catch(e => { if (e && e.name !== "NotAllowedError" && e.name !== "AbortError") fileFailed(e.name); }); }
   else {
     if (!started) { nextBar = ac.currentTime + .15; started = true; }
     clearInterval(schedTimer); schedTimer = setInterval(sched, 250); sched();
@@ -625,7 +635,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(end - start + 1))
         if code == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         try:
             with open(f, "rb") as fh:
@@ -695,6 +705,11 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     server.daemon_threads = True
+    mf = find_music()
+    if mf:
+        print(f"Музыка: {mf} ({os.path.getsize(mf) // 1024} КБ)")
+    else:
+        print(f"Музыка НЕ найдена. Положи baldinini.mp3 в папку: {BASE_DIR}")
     print(f"Server started on port {port}")
     server.serve_forever()
  

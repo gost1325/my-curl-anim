@@ -1,3 +1,4 @@
+
 import json
 import math
 import mimetypes
@@ -7,13 +8,13 @@ import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
+ 
 TELEGRAM_USER = "ImBOSS_No1"
 TIKTOK_USER = "derev_everyday"
 TELEGRAM_URL = f"https://t.me/{TELEGRAM_USER}"
 TIKTOK_URL = f"https://www.tiktok.com/@{TIKTOK_USER}"
 BTC_API = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
-
+ 
 LOGO = r"""
  __  __    _    _   _ _____ ____      _
 |  \/  |  / \  | \ | | ____|  _ \    / \
@@ -21,7 +22,7 @@ LOGO = r"""
 | |  | |/ ___ \| |\  | |___|  _ <  / ___ \
 |_|  |_/_/   \_\_| \_|_____|_| \_\/_/   \_\
 """
-
+ 
 # 1 = суша. Строка 0 = север, колонка 0 = 180° з.д.
 WORLD_MAP = [
     "0000000000000000000000000000000000000000",
@@ -39,7 +40,7 @@ WORLD_MAP = [
     "0000000000100000000000000000000000000000",
     "0000000000000000000000000000000000000000",
 ]
-
+ 
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -50,11 +51,11 @@ BLUE = "\033[94m"
 MAGENTA = "\033[95m"
 LOGO_COLORS = ["\033[96m", "\033[94m", "\033[95m", "\033[36m"]
 SHADE = " .:-=+*#%@"
-
+ 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AUDIO_EXT = (".mp3", ".ogg", ".wav", ".m4a", ".opus", ".flac")
-
-
+ 
+ 
 def find_music():
     """Трек для фона: MUSIC_FILE, затем baldinini*.mp3, затем любой аудиофайл рядом со скриптом."""
     env = os.environ.get("MUSIC_FILE")
@@ -69,19 +70,19 @@ def find_music():
     for n in pref + other:
         return os.path.join(BASE_DIR, n)
     return None
-
-
+ 
+ 
 # ---------------------------------------------------------------- BTC ----
 BTC = {"price": None, "updated": 0.0}
 BTC_LOCK = threading.Lock()
-
-
+ 
+ 
 def fetch_btc():
     req = urllib.request.Request(BTC_API, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=6) as resp:
         return float(json.loads(resp.read().decode())["data"]["amount"])
-
-
+ 
+ 
 def btc_worker():
     """Фоновый поток: обновляет цену раз в минуту, запросы клиентов не блокирует."""
     while True:
@@ -93,18 +94,18 @@ def btc_worker():
         except Exception as exc:
             print("BTC fetch failed:", exc)
         time.sleep(60)
-
-
+ 
+ 
 def btc_text():
     with BTC_LOCK:
         p = BTC["price"]
     return "н/д" if p is None else f"${p:,.0f}".replace(",", " ")
-
-
+ 
+ 
 def minsk_time():
     return datetime.now(timezone(timedelta(hours=3))).strftime("%H:%M:%S")
-
-
+ 
+ 
 # -------------------------------------------------------- ASCII globe ----
 def render_earth(angle, radius=7):
     map_h, map_w = len(WORLD_MAP), len(WORLD_MAP[0])
@@ -133,10 +134,10 @@ def render_earth(angle, radius=7):
                 row.append(f"{BLUE}{ch}{RESET}")
         lines.append("".join(row))
     return "\n".join(lines)
-
-
+ 
+ 
 EARTH_FRAMES = [render_earth(i * (2 * math.pi / 36)) for i in range(36)]
-
+ 
 # ---------------------------------------------------------------- HTML ----
 HTML = r"""<!DOCTYPE html>
 <html lang="ru">
@@ -154,7 +155,7 @@ HTML = r"""<!DOCTYPE html>
   html,body { margin:0; height:100%; background:var(--bg); color:var(--txt);
               font-family:'Courier New',Courier,monospace; overflow-x:hidden; }
   body.locked { overflow:hidden; }
-
+ 
   /* ---------- фон ---------- */
   .nebula { position:fixed; inset:-20%; z-index:0; filter:blur(60px) saturate(1.3); opacity:.55;
             background:
@@ -169,7 +170,7 @@ HTML = r"""<!DOCTYPE html>
           background:repeating-linear-gradient(0deg, transparent 0 2px, #000 2px 3px); }
   .vig { position:fixed; inset:0; z-index:49; pointer-events:none;
          background:radial-gradient(ellipse at center, transparent 55%, #000a 100%); }
-
+ 
   /* ---------- заставка ---------- */
   #intro { position:fixed; inset:0; z-index:100; display:flex; flex-direction:column;
            justify-content:center; align-items:center; gap:22px; background:#05070d;
@@ -187,7 +188,7 @@ HTML = r"""<!DOCTYPE html>
   .silent { color:var(--mut); font-size:12px; text-decoration:underline; background:none; border:0;
             font-family:inherit; cursor:pointer; padding:6px; }
   .silent:hover { color:var(--txt); }
-
+ 
   /* ---------- карточка ---------- */
   .wrap { position:relative; z-index:2; min-height:100%; display:flex; justify-content:center;
           align-items:center; padding:18px; perspective:1100px; }
@@ -214,7 +215,7 @@ HTML = r"""<!DOCTYPE html>
   .typed { min-height:20px; color:var(--cy); font-size:14px; margin-bottom:12px; text-align:center; }
   .typed::after { content:'▌'; animation:blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity:0; } }
-
+ 
   .links { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
   .btn { position:relative; overflow:hidden; display:block; text-decoration:none; text-align:center; padding:14px 8px;
          border-radius:12px; border:1px solid var(--line); background:#0a0f16; color:var(--txt);
@@ -226,13 +227,13 @@ HTML = r"""<!DOCTYPE html>
   .btn:hover { transform:translateY(-4px) scale(1.02); }
   .tg:hover { border-color:var(--cy); box-shadow:0 8px 26px rgba(57,208,224,.3); }
   .tt:hover { border-color:var(--pu); box-shadow:0 8px 26px rgba(196,155,255,.3); }
-
+ 
   .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
   .stat { background:#0a0f16; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:12px; color:var(--mut); }
   .stat b { display:block; font-size:20px; margin-top:4px; }
   .btc b { color:var(--ye); } .clk b { color:var(--gr); }
   .flash { animation:flash .9s; } @keyframes flash { 0%{color:#fff;text-shadow:0 0 14px var(--ye)} }
-
+ 
   .player { background:#0a0f16; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
   .np { font-size:11px; color:var(--mut); margin-bottom:6px; display:flex; justify-content:space-between; gap:8px; }
   .np b { color:var(--pk); font-weight:normal; }
@@ -243,39 +244,33 @@ HTML = r"""<!DOCTYPE html>
   .pbtn:hover { border-color:var(--cy); }
   input[type=range] { flex:1; accent-color:var(--cy); height:4px; }
   .foot { margin-top:12px; font-size:11px; color:var(--mut); text-align:center; }
-
+ 
   @media (max-width:420px) { #logo { font-size:9px; } #earth { font-size:11px; } }
   @media (prefers-reduced-motion:reduce) { .nebula,.terminal,.glitch::before,.glitch::after { animation:none; } }
 </style>
 </head>
-<body class="locked">
+<body>
 <div class="nebula"></div>
 <canvas id="fx"></canvas>
 <div class="scan"></div><div class="vig"></div>
-
-<div id="intro">
-  <div class="glitch" data-text="MANERA">MANERA</div>
-  <div class="enter">[ НАЖМИ, ЧТОБЫ ВОЙТИ ]</div>
-  <button class="silent" id="mute-enter">войти без звука</button>
-</div>
-
+ 
 <div class="wrap"><div class="tilt" id="tilt"><div class="terminal">
   <div class="bar"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
     <span><i class="live"></i>online · ~ $ curl manera</span></div>
   <pre id="logo">__LOGO__</pre>
   <pre id="earth"></pre>
   <div class="typed" id="typed"></div>
-
+ 
   <div class="links">
     <a class="btn tg" href="__TG__" target="_blank" rel="noopener">✈ Telegram<small>@__TGU__</small></a>
     <a class="btn tt" href="__TT__" target="_blank" rel="noopener">♪ TikTok<small>@__TTU__</small></a>
   </div>
-
+ 
   <div class="stats">
     <div class="stat btc">₿ Bitcoin<b id="btc">__BTC__</b></div>
     <div class="stat clk">⌚ Время BY<b id="clock">--:--:--</b></div>
   </div>
-
+ 
   <div class="player">
     <div class="np"><span>♪ <b id="np-title">MANERA — live synthwave</b></span><span id="state">пауза</span></div>
     <canvas id="eq" width="520" height="56"></canvas>
@@ -287,12 +282,12 @@ HTML = r"""<!DOCTYPE html>
   </div>
   <div class="foot">музыка генерируется прямо в браузере · <code>curl</code> в терминале тоже даёт анимацию</div>
 </div></div></div>
-
+ 
 <audio id="track" loop preload="auto"></audio>
 <script>
 const worldMap = __MAP__;
 const $ = id => document.getElementById(id);
-
+ 
 /* ---------- глобус ---------- */
 const shade = " .:-=+*#%@";
 let angle = 0;
@@ -320,7 +315,7 @@ function renderEarth() {
   angle += 0.12;
 }
 setInterval(renderEarth, 100); renderEarth();
-
+ 
 /* ---------- часы и биткоин ---------- */
 function tick() {
   $("clock").textContent = new Date().toLocaleTimeString("ru-RU", { timeZone: "Europe/Minsk", hour12: false });
@@ -334,7 +329,7 @@ async function refreshBtc() {
   } catch (e) {}
 }
 setInterval(refreshBtc, 30000);
-
+ 
 /* ---------- печатающаяся строка ---------- */
 const phrases = ["> connecting to MANERA...", "> globe online ✔", "> добро пожаловать", "> выбирай ссылку ↓", "> музыка играет ♪"];
 let pi = 0, ci = 0, del = false;
@@ -346,11 +341,11 @@ function type() {
   else { del = false; pi = (pi + 1) % phrases.length; setTimeout(type, 300); }
 }
 type();
-
+ 
 /* ---------- фон: звёзды + след курсора + клики ---------- */
 const cv = $("fx"), cx = cv.getContext("2d");
 let stars = [], parts = [], mx = 0, my = 0, pmx = 0, pmy = 0;
-
+ 
 /* ---------- «матричный» дождь из иероглифов ---------- */
 const GLY = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ日月火水木金土0123456789";
 const FS = 16;
@@ -382,7 +377,7 @@ function drawRain() {
   }
   cx.globalAlpha = 1;
 }
-
+ 
 function resize() {
   cv.width = innerWidth; cv.height = innerHeight;
   stars = Array.from({ length: Math.min(260, Math.floor(cv.width * cv.height / 7000)) }, () => ({
@@ -428,7 +423,7 @@ function loop(t) {
 }
 /* запуск после полной инициализации скрипта (иначе TDZ-ошибка на const/let ниже) */
 addEventListener("load", () => requestAnimationFrame(loop));
-
+ 
 /* ---------- музыка (Web Audio, синтез в реальном времени) ---------- */
 let ac, master, bus, dbus, analyser, noiseBuf, schedTimer, playing = false, started = false;
 let vol = .55, nextBar = 0, barIdx = 0, useFile = false, mediaSrc = null;
@@ -440,7 +435,7 @@ const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const PADS = [[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62]];
 const ROOTS = [45, 41, 48, 43];
 const ARP = [0, 1, 2, 1, 0, 1, 2, 4];
-
+ 
 function impulse(sec) {
   const r = ac.sampleRate, l = r * sec, b = ac.createBuffer(2, l, r);
   for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < l; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / l, 2.6); }
@@ -534,12 +529,12 @@ function pause() {
   setTimeout(() => { if (!playing) { $("track").pause(); ac.suspend(); started = false; } }, 800);
   playing = false; $("play").textContent = "▶"; $("state").textContent = "пауза";
 }
-$("play").onclick = () => playing ? pause() : play();
+$("play").onclick = () => { if (playing) { userPaused = true; pause(); } else { userPaused = false; play(); } };
 $("vol").oninput = e => {
   vol = e.target.value / 100; $("volv").textContent = e.target.value + "%";
   if (ac && playing) master.gain.setTargetAtTime(vol, ac.currentTime, .05);
 };
-
+ 
 /* ---------- эквалайзер + реакция на бас ---------- */
 const eq = $("eq"), ex = eq.getContext("2d");
 function drawEq(t) {
@@ -560,36 +555,42 @@ function drawEq(t) {
   bass += (b - bass) * .25;
   document.documentElement.style.setProperty("--pulse", bass.toFixed(3));
 }
-
-/* ---------- вход ---------- */
-function enter(withSound) {
-  $("intro").classList.add("gone");
-  document.body.classList.remove("locked");
-  setTimeout(() => document.body.classList.add("in"), 150);
-  burst(innerWidth / 2, innerHeight / 2, 80, 7);
-  if (withSound) { initAudio(); ac.resume(); musicReady.then(play); }
+ 
+/* ---------- запуск: сразу, без заставки ---------- */
+let userPaused = false;
+setTimeout(() => document.body.classList.add("in"), 100);
+$("state").textContent = "нажми куда угодно ♪";
+ 
+async function tryAuto() {            // автоплей, если браузер разрешает
+  await musicReady;
+  try { initAudio(); await ac.resume(); } catch (e) {}
+  if (ac && ac.state === "running" && !userPaused && !playing) play();
 }
-$("intro").addEventListener("click", e => { if (e.target.id !== "mute-enter") enter(true); });
-$("mute-enter").addEventListener("click", e => { e.stopPropagation(); enter(false); });
+function unlock() {                   // иначе — по первому клику/тапу/клавише
+  if (!userPaused && !playing) { initAudio(); ac.resume(); musicReady.then(play); }
+  ["pointerdown", "keydown", "touchstart"].forEach(ev => removeEventListener(ev, unlock));
+}
+["pointerdown", "keydown", "touchstart"].forEach(ev => addEventListener(ev, unlock));
+tryAuto();
 document.addEventListener("visibilitychange", () => { if (ac && playing) { document.hidden ? ac.suspend() : ac.resume(); } });
 </script>
 </body>
 </html>"""
-
-
+ 
+ 
 def build_html():
     return (HTML.replace("__LOGO__", LOGO)
                 .replace("__TG__", TELEGRAM_URL).replace("__TGU__", TELEGRAM_USER)
                 .replace("__TT__", TIKTOK_URL).replace("__TTU__", TIKTOK_USER)
                 .replace("__BTC__", btc_text())
                 .replace("__MAP__", json.dumps(WORLD_MAP)))
-
-
+ 
+ 
 # -------------------------------------------------------------- server ----
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
-
+ 
     def _send(self, code, ctype, body):
         data = body.encode("utf-8")
         self.send_response(code)
@@ -598,7 +599,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
-
+ 
     def _serve_music(self):
         f = find_music()
         if not f:
@@ -638,10 +639,10 @@ class Handler(BaseHTTPRequestHandler):
                     left -= len(chunk)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
-
+ 
     def do_GET(self):
         path = self.path.split("?")[0]
-
+ 
         if path == "/healthz":
             return self._send(200, "text/plain", "ok")
         if path == "/api/btc":
@@ -655,10 +656,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_music()
         if path != "/":
             return self._send(404, "text/plain; charset=utf-8", "404 not found")
-
+ 
         if "curl" not in self.headers.get("User-Agent", "").lower():
             return self._send(200, "text/html; charset=utf-8", build_html())
-
+ 
         # curl: бесконечный ASCII-стрим
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -687,8 +688,8 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(0.12)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
-
-
+ 
+ 
 if __name__ == "__main__":
     threading.Thread(target=btc_worker, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
@@ -696,3 +697,4 @@ if __name__ == "__main__":
     server.daemon_threads = True
     print(f"Server started on port {port}")
     server.serve_forever()
+ 

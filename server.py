@@ -217,7 +217,7 @@ HTML = r"""<!DOCTYPE html>
   .typed::after { content:'▌'; animation:blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity:0; } }
 
-  .links { position:relative; z-index:5; display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin-bottom:12px; }
+  .links { position:relative; z-index:5; display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
   .btn { position:relative; overflow:hidden; display:block; text-decoration:none; text-align:center; padding:14px 8px;
          border-radius:12px; border:1px solid var(--line); background:#0a0f16; color:var(--txt);
          font-weight:bold; font-size:14px; transition:transform .18s, box-shadow .18s, border-color .18s; }
@@ -247,6 +247,7 @@ HTML = r"""<!DOCTYPE html>
   input[type=range] { flex:1; accent-color:var(--cy); height:4px; }
   .foot { margin-top:12px; font-size:11px; color:var(--mut); text-align:center; }
 
+  @media (max-width:520px) { .links { grid-template-columns:1fr; } }
   @media (max-width:420px) { #logo { font-size:9px; } #earth { font-size:11px; } }
   @media (prefers-reduced-motion:reduce) { .nebula,.terminal,.glitch::before,.glitch::after { animation:none; } }
 </style>
@@ -303,7 +304,7 @@ function renderEarth() {
       const nx = x / (R * 2), r2 = nx * nx + ny * ny;
       if (r2 > 1) { out += " "; continue; }
       const nz = Math.sqrt(1 - r2);
-      const lat = Math.asin(max(-1, Math.min(1, -ny)));
+      const lat = Math.asin(Math.max(-1, Math.min(1, -ny)));
       const lon = Math.atan2(nx, nz) + angle;
       const u = ((lon / (2 * Math.PI)) % 1 + 1) % 1;
       const v = 0.5 - lat / Math.PI;

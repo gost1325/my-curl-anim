@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1c120d">
+<title>Songbook — гитарный песенник</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&family=Onest:wght@400;600;700;800&display=swap">
+<style>
+/* ───────── tokens ───────── */
+:root{
+  color-scheme:dark;
+  /* «Гриф»: палисандр, перламутр, латунь */
+  --bg:#1c120d; --surface:#261913; --surface-2:#30211a; --line:#3e2c22;
+  --ink:#f0e8d6; --ink-2:#c9bca4; --ink-3:#a08e78;
+  --accent:#e3b04b; --on-accent:#1c120d;
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+  --f-ui:'Onest','Segoe UI',system-ui,-apple-system,Roboto,'Helvetica Neue',Arial,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  --lyric:24px;
+  --gut:clamp(26px,5.5vw,46px);
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  /* «Лист»: бумага и синий карандаш */
+  --bg:#f2f3f0; --surface:#ffffff; --surface-2:#e9ebe6; --line:#d3d6cf;
+  --ink:#15171a; --ink-2:#474c53; --ink-3:#666b73;
+  --accent:#1d4ed8; --on-accent:#ffffff;
+  --shadow:0 10px 30px rgba(20,30,40,.14);
+}
+
+/* ───────── base ───────── */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:var(--f-ui);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[data-icon]{display:inline-flex;align-items:center;justify-content:center}
+
+/* ───────── buttons ───────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:700;font-size:14px;cursor:pointer;touch-action:manipulation;transition:background .15s,border-color .15s,color .15s}
+.btn:hover{border-color:var(--ink-3)}
+.btn:active{background:var(--surface-2)}
+.btn.icon{width:40px;padding:0}
+.btn.sm{width:36px;min-height:36px;padding:0;border-radius:8px}
+.btn.pill{min-height:36px;padding:0 12px;border-radius:8px}
+.btn.solid,.btn.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.danger:hover{border-color:#e5484d;color:#e5484d}
+.btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.btn.sm svg{width:18px;height:18px}
+
+/* ───────── top bar ───────── */
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));background:var(--bg);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:17px;letter-spacing:-.01em}
+.mark{display:flex;flex-direction:column;gap:3px}
+.mark i{display:block;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.spacer{flex:1}
+.tabs{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:9px}
+.tabs button{border:0;background:none;padding:7px 14px;border-radius:6px;font-weight:700;font-size:14px;color:var(--ink-2);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* ───────── library drawer ───────── */
+.drawer{position:fixed;inset:0 auto 0 0;z-index:60;width:min(340px,88vw);display:flex;flex-direction:column;gap:12px;padding:16px;padding-top:calc(16px + env(safe-area-inset-top));background:var(--surface);border-right:1px solid var(--line);box-shadow:var(--shadow);transform:translateX(-104%);transition:transform .26s cubic-bezier(.2,.8,.2,1)}
+.drawer.open{transform:none}
+.drawer-head{display:flex;align-items:center;justify-content:space-between}
+.drawer-head h2{margin:0;font-size:18px;font-weight:800}
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.show{opacity:1;pointer-events:auto}
+.songlist{list-style:none;margin:0;padding:0;flex:1;overflow:auto;display:flex;flex-direction:column;gap:4px}
+.song-item{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;padding:10px 12px;border-radius:8px;border:1px solid transparent;background:none;cursor:pointer}
+.song-item:hover{background:var(--surface-2)}
+.song-item[aria-current="true"]{border-color:var(--accent)}
+.si-t{font-weight:700;font-size:15px;overflow-wrap:anywhere}
+.si-a{font-size:13px;color:var(--ink-3)}
+.drawer-foot{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ───────── page ───────── */
+.main{max-width:920px;margin:0 auto;padding:28px 16px 170px}
+@media(min-width:700px){.main{padding:44px 28px 180px}}
+.sheet-head h1{margin:0;font-weight:800;font-size:clamp(32px,7vw,60px);line-height:1.02;letter-spacing:-.035em;text-wrap:balance;overflow-wrap:anywhere}
+.artist{margin:.55em 0 0;font-size:clamp(16px,2.6vw,20px);font-weight:600;color:var(--accent)}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.chip{padding:5px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.chip b{color:var(--ink)}
+.chip.hot,.chip.hot b{color:var(--accent)}
+.chip.hot{border-color:var(--accent)}
+.hint{margin:16px 0 0;max-width:40em;color:var(--ink-2);font-size:15px;line-height:1.55}
+
+/* chord boxes */
+.strip{display:flex;gap:10px;overflow-x:auto;padding:24px 0 8px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.mini{flex:none;width:84px;scroll-snap-align:start;padding:8px 8px 4px;background:transparent;border:1px solid var(--line);border-radius:4px;cursor:pointer;text-align:center}
+.mini:hover,.mini:focus-visible{border-color:var(--accent)}
+.mini .nm{display:block;margin-bottom:2px;font-family:var(--f-mono);font-weight:800;font-size:15px;color:var(--accent)}
+.nodiag{padding:22px 4px;font-size:12px;color:var(--ink-3)}
+.dg{display:block;width:100%;height:auto}
+.dg .str{stroke:var(--ink-3);stroke-width:1.2}
+.dg .fret{stroke:var(--ink-3);stroke-width:1;opacity:.6}
+.dg .nut{fill:var(--ink)}
+.dg .fd{fill:var(--accent)}
+.dg .barre{stroke:var(--accent);stroke-width:11;stroke-linecap:round}
+.dg .mx{fill:none;stroke:var(--ink-2);stroke-width:1.6;stroke-linecap:round}
+.dg .mo{fill:none;stroke:var(--ink-2);stroke-width:1.6}
+.dg .frn{font:800 12px var(--f-mono);fill:var(--ink-2)}
+
+/* ───────── the song ───────── */
+.song{margin-top:34px;max-width:46rem;font-size:var(--lyric);line-height:1.3}
+.blk{position:relative;display:grid;grid-template-columns:var(--gut) minmax(0,1fr);margin:0 0 1.4em}
+.blk::before{content:"";position:absolute;left:calc(var(--gut) / 2);top:0;bottom:-1.4em;width:1px;background:var(--line)}
+.blk:last-child::before{bottom:0}
+.gut{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:.28em}
+/* маркеры разделов — как точки-инкрустации на грифе */
+.inlay{display:block;width:11px;height:11px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 5px var(--bg)}
+.inlay.ring{background:var(--bg);box-shadow:none;border:2px solid var(--ink-2)}
+.chorus .inlay{background:var(--accent)}
+.sec{margin:0 0 .45em;font-size:.62em;line-height:1.6;font-weight:700;color:var(--ink-2)}
+.chorus .sec{color:var(--accent)}
+
+.ln{display:flex;flex-wrap:wrap;align-items:flex-end;row-gap:.1em;margin:0 0 .32em}
+.ln.plain{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
+.ln.only{gap:.05em .6em;margin-bottom:.4em}
+.sg{display:flex;flex-direction:column;min-width:0;max-width:100%}
+.tx{display:block;min-width:0;min-height:1.3em;white-space:pre-wrap;overflow-wrap:anywhere}
+.ch{display:block;min-height:1.2em;margin:0;padding:0 .5em 0 0;border:0;background:none;-webkit-appearance:none;appearance:none;text-align:left;cursor:pointer;font-family:var(--f-mono);font-weight:800;font-size:.74em;line-height:1.2;color:var(--accent);white-space:nowrap;touch-action:manipulation}
+.ch:hover{text-decoration:underline;text-underline-offset:.2em}
+.ch.ph{cursor:default}
+.ln.only .ch{padding:0;font-size:.8em}
+.bar{align-self:center;font-family:var(--f-mono);font-weight:700;font-size:.6em;color:var(--ink-3)}
+.gap{height:.7em}
+.empty{margin:0;max-width:34em;color:var(--ink-2);font-size:17px;line-height:1.6}
+/* режим «только текст» */
+.nochords .sg{display:inline}
+.nochords .tx{display:inline;min-height:0}
+.nochords .ln:not(.plain){display:block;white-space:pre-wrap}
+.nochords .ch,.nochords .ln.only{display:none}
+
+@keyframes settle{from{opacity:0;transform:translateY(-.35em)}to{opacity:1;transform:none}}
+.boot .ch{animation:settle .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 28ms)}
+
+/* ───────── bottom dock ───────── */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:35;display:flex;align-items:stretch;overflow-x:auto;padding:0 6px env(safe-area-inset-bottom);background:var(--bg);border-top:1px solid var(--line);scrollbar-width:none}
+.dock::-webkit-scrollbar{display:none}
+.grp{flex:none;display:flex;align-items:center;gap:6px;padding:9px 12px;border-right:1px solid var(--line)}
+.grp:first-child{margin-left:auto}
+.grp:last-child{border-right:0;margin-right:auto}
+.lbl{font-size:12px;font-weight:600;color:var(--ink-3)}
+.grp output{min-width:2.4ch;text-align:center;font-family:var(--f-mono);font-weight:800;font-size:15px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:96px;height:28px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:var(--accent);border:0}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:0}
+
+/* chord popup */
+.chordcard{position:fixed;z-index:45;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:172px;padding:10px 12px 8px;background:var(--surface);border:1px solid var(--accent);border-radius:6px;box-shadow:var(--shadow)}
+.cc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.cc-name{font-family:var(--f-mono);font-weight:800;font-size:24px;color:var(--accent)}
+.cc-note{margin-top:4px;font-size:12px;color:var(--ink-3);text-align:center}
+@media(max-width:560px){.chordcard{left:50%;right:auto;transform:translateX(-50%)}}
+
+.toast{position:fixed;left:50%;top:calc(66px + env(safe-area-inset-top));z-index:80;max-width:90vw;padding:10px 16px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:14px;font-weight:600;text-align:center;opacity:0;transform:translate(-50%,-8px);pointer-events:none;transition:opacity .2s,transform .2s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ───────── editor ───────── */
+#editPane{display:grid;grid-template-columns:minmax(0,1fr);gap:22px}
+@media(min-width:1000px){#editPane{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
+.editor,.preview{padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.preview-t{margin:0 0 14px;font-size:14px;font-weight:700;color:var(--ink-3)}
+.preview .song{--lyric:19px;margin-top:0}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:560px){.fields{grid-template-columns:1fr}}
+.f{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink-3)}
+.in{width:100%;min-height:44px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:600 16px var(--f-ui)}
+.in:focus{outline:none;border-color:var(--accent)}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+textarea.in{display:block;min-height:360px;padding:12px;resize:vertical;font:500 14px/1.55 var(--f-mono);white-space:pre;overflow:auto;tab-size:4}
+@media(pointer:coarse){textarea.in{font-size:16px}}
+.help{margin-top:14px;font-size:14px;line-height:1.55;color:var(--ink-2)}
+.help summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.help p{margin:10px 0 4px}
+.help pre{margin:4px 0 8px;padding:10px 12px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg);font:500 13px/1.5 var(--f-mono);color:var(--ink)}
+.help code{font-family:var(--f-mono);font-size:13px;color:var(--accent)}
+
+@media(max-width:640px){.brand{font-size:16px}.tabs button{padding:7px 11px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ───────── print ───────── */
+@media print{
+  :root,:root[data-theme]{--bg:#fff;--surface:#fff;--surface-2:#fff;--line:#aaa;--ink:#000;--ink-2:#222;--ink-3:#444;--accent:#1a3fb5;--lyric:16px}
+  body{background:#fff}
+  .topbar,.dock,.drawer,.scrim,.chordcard,.toast,#editPane{display:none!important}
+  .main{padding:0;max-width:none}
+  .strip{flex-wrap:wrap;overflow:visible}
+  .blk{break-inside:avoid}
+  .ch,.inlay,.dg *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .boot .ch{animation:none}
+}
+</style>
+</head>
+<body>
+<noscript>Для работы songbook нужен включённый JavaScript.</noscript>
+
+<header class="topbar">
+  <button class="btn icon" id="btnLib" type="button" aria-label="Мои песни" data-icon="menu"></button>
+  <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i></span>Songbook</div>
+  <div class="spacer"></div>
+  <div class="tabs" role="tablist" aria-label="Режим">
+    <button id="tabPlay" type="button" role="tab" aria-selected="true">Играть</button>
+    <button id="tabEdit" type="button" role="tab" aria-selected="false">Править</button>
+  </div>
+  <button class="btn icon" id="btnTheme" type="button" aria-label="Сменить тему"></button>
+</header>
+
+<aside class="drawer" id="drawer" aria-label="Мои песни">
+  <div class="drawer-head">
+    <h2>Мои песни</h2>
+    <button class="btn sm" id="btnLibClose" type="button" aria-label="Закрыть" data-icon="close"></button>
+  </div>
+  <button class="btn solid" id="btnNew" type="button"><span data-icon="plus"></span>Новая песня</button>
+  <ul class="songlist" id="songList"></ul>
+  <div class="drawer-foot">
+    <button class="btn" id="btnImport" type="button"><span data-icon="upload"></span>Открыть .txt</button>
+    <button class="btn" id="btnExport" type="button"><span data-icon="download"></span>Сохранить .txt</button>
+  </div>
+  <input type="file" id="fileIn" accept=".txt,text/plain" hidden>
+</aside>
+<div class="scrim" id="scrim"></div>
+
+<main class="main">
+  <section id="viewPane">
+    <article class="sheet" id="sheet">
+      <header class="sheet-head">
+        <h1 id="vTitle"></h1>
+        <p class="artist" id="vArtist"></p>
+        <div class="meta" id="vMeta"></div>
+        <p class="hint" id="vHint" hidden></p>
+      </header>
+      <div class="strip" id="chordStrip" hidden></div>
+      <div class="song" id="song"></div>
+    </article>
+  </section>
+
+  <section id="editPane" hidden>
+    <div class="editor">
+      <div class="fields">
+        <label class="f">Название<input class="in" id="fTitle" type="text" autocomplete="off"></label>
+        <label class="f">Исполнитель<input class="in" id="fArtist" type="text" autocomplete="off"></label>
+      </div>
+      <div class="quick">
+        <button class="btn pill" id="btnPaste" type="button"><span data-icon="clip"></span>Вставить из буфера</button>
+        <button class="btn pill" type="button" data-ins="verse">[Куплет]</button>
+        <button class="btn pill" type="button" data-ins="chorus">[Припев]</button>
+        <button class="btn pill" type="button" data-ins="instr">[Проигрыш]</button>
+      </div>
+      <textarea class="in" id="fText" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Текст песни с аккордами" placeholder="Вставь сюда текст песни. Аккорды — в скобках [Am] или отдельной строкой над текстом."></textarea>
+      <details class="help">
+        <summary>Как записывать аккорды</summary>
+        <p>В скобках прямо в строке — аккорд встанет над следующим слогом:</p>
+        <pre>[Am]Тихо гаснет [G]над рекой</pre>
+        <p>Отдельной строкой над текстом, как на сайтах с аккордами. Выровняй аккорд пробелами над нужной буквой:</p>
+        <pre>Am          G
+Тихо гаснет над рекой</pre>
+        <p>Разделы: строки <code>[Куплет 1]</code>, <code>[Припев]</code>, <code>[Проигрыш]</code> становятся заголовками, а припев отмечается двойной точкой.</p>
+        <p>Строка из одних аккордов (<code>Am G F E</code>) — вступление или проигрыш. Знаки <code>|</code> и <code>x2</code> остаются как есть.</p>
+      </details>
+      <div class="quick" style="margin:16px 0 0">
+        <button class="btn pill danger" id="btnDelete" type="button"><span data-icon="trash"></span>Удалить песню</button>
+      </div>
+    </div>
+    <aside class="preview">
+      <h2 class="preview-t">Так это будет выглядеть</h2>
+      <div class="song" id="preview"></div>
+    </aside>
+  </section>
+</main>
+
+<nav class="dock" id="dock" aria-label="Панель игры">
+  <div class="grp" role="group" aria-label="Транспонирование">
+    <span class="lbl">Тон</span>
+    <button class="btn sm" id="trDown" type="button" aria-label="Тон ниже на полутон" data-icon="minus"></button>
+    <output id="trVal" aria-live="polite">0</output>
+    <button class="btn sm" id="trUp" type="button" aria-label="Тон выше на полутон" data-icon="plus"></button>
+  </div>
+  <div class="grp" role="group" aria-label="Каподастр">
+    <span class="lbl">Капо</span>
+    <button class="btn sm" id="cpDown" type="button" aria-label="Каподастр ниже" data-icon="minus"></button>
+    <output id="cpVal" aria-live="polite">0</output>
+    <button class="btn sm" id="cpUp" type="button" aria-label="Каподастр выше" data-icon="plus"></button>
+  </div>
+  <div class="grp" role="group" aria-label="Размер текста">
+    <span class="lbl">Размер</span>
+    <button class="btn sm" id="szDown" type="button" aria-label="Мельче" data-icon="minus"></button>
+    <output id="szVal">24</output>
+    <button class="btn sm" id="szUp" type="button" aria-label="Крупнее" data-icon="plus"></button>
+  </div>
+  <div class="grp" role="group" aria-label="Автопрокрутка">
+    <button class="btn pill" id="btnScroll" type="button"><span id="scrollIco" data-icon="play"></span><span id="scrollTxt">Прокрутка</span></button>
+    <input id="speed" type="range" min="1" max="12" step="1" value="4" aria-label="Скорость прокрутки">
+  </div>
+  <div class="grp" role="group" aria-label="Вид">
+    <button class="btn sm" id="btnChords" type="button" aria-label="Показывать аккорды" title="Аккорды" data-icon="note"></button>
+    <button class="btn sm" id="btnDiag" type="button" aria-label="Схемы аккордов" title="Схемы аккордов" data-icon="grid"></button>
+    <button class="btn sm" id="btnAcc" type="button" aria-label="Диезы или бемоли" title="Диезы / бемоли">♯♭</button>
+    <button class="btn sm" id="btnWake" type="button" aria-label="Не гасить экран" title="Не гасить экран" data-icon="screen"></button>
+    <button class="btn sm" id="btnPrint" type="button" aria-label="Печать" title="Печать" data-icon="print"></button>
+  </div>
+</nav>
+
+<div class="chordcard" id="chordCard" hidden role="dialog" aria-label="Схема аккорда">
+  <div class="cc-head"><span class="cc-name" id="ccName"></span><button class="btn sm" id="ccClose" type="button" aria-label="Закрыть" data-icon="close"></button></div>
+  <div id="ccBody"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ───────── helpers ───────── */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const mod12 = n => ((n % 12) + 12) % 12;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+/* ───────── icons ───────── */
+const ICONS = {
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  minus:'<path d="M5 12h14"/>',
+  play:'<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>',
+  pause:'<path d="M9 5.5v13M15 5.5v13" stroke-width="3"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  moon:'<path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/>',
+  close:'<path d="M6 6l12 12M18 6L6 18"/>',
+  note:'<path d="M9 18V5.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+  grid:'<rect x="5" y="3.5" width="14" height="17" rx="1.5"/><path d="M9.7 3.5v17M14.3 3.5v17M5 9h14M5 14.5h14"/>',
+  screen:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  print:'<path d="M7 9V3.5h10V9M7 17.5H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="6.5" rx="1"/>',
+  download:'<path d="M12 3.5v12M7 10.5l5 5 5-5M4.5 20.5h15"/>',
+  upload:'<path d="M12 16.5v-12M7 9.5l5-5 5 5M4.5 20.5h15"/>',
+  trash:'<path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/>',
+  clip:'<rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V3h6v2M9 11h6M9 15h6"/>'
+};
+const svgIcon = n => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[n] || ''}</svg>`;
+const setIcon = (el, n) => { if(el) el.innerHTML = svgIcon(n); };
+
+/* ───────── music theory ───────── */
+const NOTE_PC = {C:0, D:2, E:4, F:5, G:7, A:9, B:11};
+const NAMES = {
+  auto : ['C','C#','D','Eb','E','F','F#','G','G#','A','Bb','B'],
+  sharp: ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],
+  flat : ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B']
+};
+// корень, качество (m, 7, maj7, sus4, add9 ...) и необязательный бас через «/»
+const CHORD_RE = /^([A-G])([#b♯♭]?)((?:maj|min|dim|aug|add|sus|m|M|[-+°ø√Δ]|\d{1,2}(?!\d)|[#b♯♭]\d{1,2}(?!\d)|\([^)\s]*\))*)(?:\/([A-G])([#b♯♭]?))?$/;
+
+function parseChord(tok){
+  if(!tok || tok.length > 16) return null;
+  const m = CHORD_RE.exec(tok);
+  return m ? { root: m[1] + m[2], qual: m[3], bass: m[4] ? m[4] + m[5] : null } : null;
+}
+function pcOf(n){
+  let pc = NOTE_PC[n[0]];
+  const a = n[1];
+  if(a === '#' || a === '♯') pc++; else if(a === 'b' || a === '♭') pc--;
+  return mod12(pc);
+}
+function transposeChord(tok, shift, pref){
+  if(!shift && pref === 'auto') return tok;
+  const c = parseChord(tok);
+  if(!c) return tok;
+  const names = NAMES[pref] || NAMES.auto;
+  return names[mod12(pcOf(c.root) + shift)] + c.qual + (c.bass ? '/' + names[mod12(pcOf(c.bass) + shift)] : '');
+}
+
+/* ───────── guitar chord shapes ───────── */
+// 6 струн, снизу вверх (E A D G B e): -1 — не играть, 0 — открытая, N — лад
+const OPEN_LIST = [
+  ['C','maj',[-1,3,2,0,1,0]], ['C','7',[-1,3,2,3,1,0]], ['C','maj7',[-1,3,2,0,0,0]], ['C','sus2',[-1,3,0,0,1,3]],
+  ['C','sus4',[-1,3,3,0,1,1]], ['C','add9',[-1,3,2,0,3,0]], ['C','6',[-1,3,2,2,1,0]],
+  ['D','maj',[-1,-1,0,2,3,2]], ['D','m',[-1,-1,0,2,3,1]], ['D','7',[-1,-1,0,2,1,2]], ['D','m7',[-1,-1,0,2,1,1]],
+  ['D','maj7',[-1,-1,0,2,2,2]], ['D','sus2',[-1,-1,0,2,3,0]], ['D','sus4',[-1,-1,0,2,3,3]], ['D','6',[-1,-1,0,2,0,2]],
+  ['D','m6',[-1,-1,0,2,0,1]], ['D','dim',[-1,-1,0,1,3,1]], ['D','aug',[-1,-1,0,3,3,2]], ['D','5',[-1,-1,0,2,3,-1]],
+  ['G','maj',[3,2,0,0,0,3]], ['G','7',[3,2,0,0,0,1]], ['G','maj7',[3,2,0,0,0,2]], ['G','sus4',[3,3,0,0,1,3]],
+  ['G','sus2',[3,0,0,0,3,3]], ['G','6',[3,2,0,0,0,0]], ['G','add9',[3,2,0,2,0,3]],
+  ['B','7',[-1,2,1,2,0,2]], ['B','m7',[-1,2,0,2,0,2]],
+  ['F','maj7',[-1,-1,3,2,1,0]]
+];
+const OPEN = new Map(OPEN_LIST.map(([r, q, s]) => [pcOf(r) + ':' + q, s]));
+// переносные формы: корень на 6-й (E-форма) или на 5-й (A-форма) струне; null — струна не играет
+const E_SHAPES = {
+  maj:[0,2,2,1,0,0], m:[0,2,2,0,0,0], '7':[0,2,0,1,0,0], m7:[0,2,0,0,0,0], maj7:[0,2,1,1,0,0],
+  sus4:[0,2,2,2,0,0], aug:[0,3,2,1,1,0], '6':[0,2,2,1,2,0], m6:[0,2,2,0,2,0], '9':[0,2,0,1,0,2],
+  '5':[0,2,2,null,null,null]
+};
+const A_SHAPES = {
+  maj:[null,0,2,2,2,0], m:[null,0,2,2,1,0], '7':[null,0,2,0,2,0], m7:[null,0,2,0,1,0], maj7:[null,0,2,1,2,0],
+  sus2:[null,0,2,2,0,0], sus4:[null,0,2,2,3,0], dim:[null,0,1,2,1,null], '6':[null,0,2,2,2,2], m6:[null,0,2,2,1,2],
+  '5':[null,0,2,2,null,null], add9:[null,0,2,4,2,0], '9':[null,0,-1,0,0,0], m7b5:[null,0,1,0,1,null]
+};
+const Q_ALIAS = new Map(Object.entries({
+  '':'maj', M:'maj', maj:'maj', m:'m', min:'m', '-':'m', '7':'7', m7:'m7', min7:'m7', '-7':'m7',
+  maj7:'maj7', M7:'maj7', 'Δ':'maj7', 'Δ7':'maj7', sus4:'sus4', sus:'sus4', sus2:'sus2',
+  dim:'dim', '°':'dim', aug:'aug', '+':'aug', '6':'6', m6:'m6', '5':'5', add9:'add9', '9':'9',
+  m7b5:'m7b5', 'ø':'m7b5', 'm7-5':'m7b5', 'm7(b5)':'m7b5'
+}));
+function qualityOf(qual){
+  const q0 = qual.replace(/\s+/g, '');
+  if(Q_ALIAS.has(q0)) return [Q_ALIAS.get(q0), false];
+  const q1 = q0.replace(/\([^)]*\)/g, '');
+  if(Q_ALIAS.has(q1)) return [Q_ALIAS.get(q1), true];
+  if(/sus2/.test(q1)) return ['sus2', true];
+  if(/sus/.test(q1)) return ['sus4', true];
+  if(/^(?:maj|M|Δ)/.test(q1)) return ['maj7', true];
+  if(/^(?:dim|°)/.test(q1)) return ['dim', true];
+  if(/^(?:aug|\+)/.test(q1)) return ['aug', true];
+  if(/^(?:min|m|-)/.test(q1)) return [/\d/.test(q1) ? 'm7' : 'm', true];
+  if(/^\d/.test(q1)) return ['7', true];
+  return ['maj', true];
+}
+function place(tpl, p){
+  const out = tpl.map(o => o === null ? -1 : p + o);
+  for(let i = 0; i < out.length; i++){ if(tpl[i] !== null && out[i] < 0) return null; }
+  return out;
+}
+const reach = s => { const f = s.filter(x => x > 0); return f.length ? Math.max(...f) : 0; };
+function shapeFor(name){
+  const c = parseChord(name);
+  if(!c) return null;
+  const [q, approx] = qualityOf(c.qual);
+  const pc = pcOf(c.root);
+  let shape = OPEN.get(pc + ':' + q) || null;
+  if(!shape){
+    const cands = [];
+    if(E_SHAPES[q]){ const s = place(E_SHAPES[q], mod12(pc - 4)); if(s) cands.push(s); }
+    if(A_SHAPES[q]){ const s = place(A_SHAPES[q], mod12(pc - 9)); if(s) cands.push(s); }
+    cands.sort((a, b) => reach(a) - reach(b));
+    shape = cands[0] || null;
+  }
+  return shape ? { shape, approx, bass: c.bass } : null;
+}
+function diagramSvg(shape){
+  const W = 120, H = 140, x0 = 24, dx = 14.4, y0 = 34, fh = 19, nf = 5;
+  const fr = shape.filter(f => f > 0);
+  const minF = fr.length ? Math.min(...fr) : 1;
+  const maxF = fr.length ? Math.max(...fr) : 1;
+  const base = maxF <= nf ? 1 : minF;
+  const X = i => +(x0 + dx * i).toFixed(2);
+  const Y = f => y0 + fh * (f - base + 0.5);
+  let s = `<svg class="dg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Схема аккорда">`;
+  for(let i = 1; i <= nf; i++) s += `<line class="fret" x1="${x0}" y1="${y0 + fh * i}" x2="${X(5)}" y2="${y0 + fh * i}"/>`;
+  for(let i = 0; i < 6; i++) s += `<line class="str" x1="${X(i)}" y1="${y0}" x2="${X(i)}" y2="${y0 + fh * nf}"/>`;
+  if(base === 1){
+    s += `<rect class="nut" x="${x0 - 1}" y="${y0 - 4}" width="${dx * 5 + 2}" height="5" rx="1.5"/>`;
+  } else {
+    s += `<line class="fret" x1="${x0}" y1="${y0}" x2="${X(5)}" y2="${y0}"/>`;
+    s += `<text class="frn" x="${X(5) + 9}" y="${y0 + fh / 2 + 4}">${base}</text>`;
+  }
+  shape.forEach((f, i) => {
+    if(f === -1) s += `<path class="mx" d="M${X(i) - 4} 16.5l8 8m0-8l-8 8"/>`;
+    else if(f === 0) s += `<circle class="mo" cx="${X(i)}" cy="20.5" r="4"/>`;
+  });
+  const played = shape.map((f, i) => ({f, i})).filter(o => o.f >= 0);
+  let barre = null;
+  if(fr.length && played.length >= 4){
+    const a = played[0], b = played[played.length - 1];
+    if(a.f === minF && b.f === minF && played.every(o => o.f >= minF)) barre = {from:a.i, to:b.i};
+  }
+  if(barre) s += `<line class="barre" x1="${X(barre.from)}" y1="${Y(minF)}" x2="${X(barre.to)}" y2="${Y(minF)}"/>`;
+  shape.forEach((f, i) => {
+    if(f <= 0) return;
+    if(barre && f === minF && i >= barre.from && i <= barre.to) return;
+    const row = f - base;
+    if(row >= 0 && row < nf) s += `<circle class="fd" cx="${X(i)}" cy="${Y(f)}" r="5.6"/>`;
+  });
+  return s + '</svg>';
+}
+const diagramHtml = name => { const r = shapeFor(name); return r ? diagramSvg(r.shape) : '<div class="nodiag">нет схемы</div>'; };
+
+/* ───────── song text → structure ───────── */
+const SEP_RE = /^(?:\|{1,2}:?|:\|{1,2}|\/|-|—|–|•|\*|\.{2,3}|…|x\d+|\d+x|\(x\d+\)|\(\d+x\)|n\.?c\.?)$/i;
+const SECTION_WORDS = /^(?:куплет|припев|проигрыш|вступление|интро|аутро|бридж|соло|окончание|заключение|переход|реприза|verse|chorus|pre-?chorus|bridge|intro|outro|solo|interlude|instrumental|refrain|coda|hook|tag)(?:\s*[\d№#]+)?(?:\s*\([^)]*\))?\s*[:.]?$/i;
+
+function sectionLabel(line){
+  const t = line.trim();
+  let m = /^\[([^\[\]]+)\]\s*:?$/.exec(t);
+  if(m){ const inner = m[1].trim(); return parseChord(inner) ? null : inner; }
+  m = /^#+\s*(.+)$/.exec(t);
+  if(m) return m[1].trim();
+  m = /^\(([^()]+)\)\s*:?$/.exec(t);
+  if(m && SECTION_WORDS.test(m[1].trim())) return m[1].trim();
+  if(SECTION_WORDS.test(t)) return t.replace(/\s*[:.]$/, '');
+  return null;
+}
+// строка из одних аккордов (со знаками повтора): вернёт позиции аккордов
+function chordLine(line){
+  const re = /\S+/g, chords = [], tokens = [];
+  let m;
+  while((m = re.exec(line)) !== null){
+    const tok = m[0];
+    if(parseChord(tok)){ chords.push({name: tok, col: m.index}); tokens.push({chord: tok}); }
+    else if(SEP_RE.test(tok)) tokens.push({sep: tok});
+    else return null;
+  }
+  return chords.length ? {chords, tokens} : null;
+}
+// аккорды в скобках внутри строки: [Am]слово
+function parseInline(line){
+  const re = /\[([^\[\]]+)\]/g;
+  const segs = [];
+  let m, idx = 0, found = false, cur = null;
+  while((m = re.exec(line)) !== null){
+    const inner = m[1].trim();
+    if(!parseChord(inner)) continue;
+    found = true;
+    const txt = line.slice(idx, m.index);
+    if(txt || cur !== null) segs.push({chord: cur, text: txt});
+    cur = inner;
+    idx = m.index + m[0].length;
+  }
+  if(!found) return null;
+  segs.push({chord: cur, text: line.slice(idx)});
+  return segs;
+}
+// строка аккордов над строкой текста → сегменты «аккорд + кусок текста»
+function mergeChordLine(chords, lyric){
+  const L = lyric.length, segs = [];
+  if(chords[0].col > 0 && L > 0){
+    const pre = lyric.slice(0, Math.min(chords[0].col, L));
+    if(pre) segs.push({chord: null, text: pre});
+  }
+  chords.forEach((c, k) => {
+    const s = Math.min(c.col, L);
+    const e = k + 1 < chords.length ? Math.min(chords[k + 1].col, L) : L;
+    segs.push({chord: c.name, text: lyric.slice(s, e)});
+  });
+  return segs;
+}
+function parseSong(text){
+  const lines = String(text || '').replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').replace(/\t/g, '    ').split('\n');
+  const out = [];
+  for(let i = 0; i < lines.length; i++){
+    const line = lines[i].replace(/\s+$/, '');
+    if(!line.trim()){ out.push({type:'blank'}); continue; }
+    const sec = sectionLabel(line);
+    if(sec !== null){ out.push({type:'section', label: sec}); continue; }
+    const cl = chordLine(line);
+    if(cl){
+      const nxt = i + 1 < lines.length ? lines[i + 1].replace(/\s+$/, '') : '';
+      if(nxt.trim() && sectionLabel(nxt) === null && !chordLine(nxt) && !parseInline(nxt)){
+        out.push({type:'line', segs: mergeChordLine(cl.chords, nxt)});
+        i++;
+      } else {
+        out.push({type:'chords', tokens: cl.tokens});
+      }
+      continue;
+    }
+    const inl = parseInline(line);
+    if(inl){
+      if(inl.every(s => !s.text.trim())) out.push({type:'chords', tokens: inl.filter(s => s.chord).map(s => ({chord: s.chord}))});
+      else out.push({type:'line', segs: inl});
+      continue;
+    }
+    out.push({type:'line', segs:[{chord: null, text: line}]});
+  }
+  return out;
+}
+
+/* ───────── structure → HTML ───────── */
+const nb = t => t.replace(/^ /, '\u00a0').replace(/ $/, '\u00a0');
+function chordBtn(name, shift, acc){
+  const shown = transposeChord(name, shift, acc);
+  return `<button type="button" class="ch" data-ch="${esc(shown)}">${esc(shown)}</button>`;
+}
+function songHtml(text, shift, acc){
+  const items = parseSong(text);
+  const out = [];
+  let inBlock = false, lastBlank = true, li = 0;
+  const close = () => { if(inBlock){ out.push('</div></section>'); inBlock = false; } };
+  const open = label => {
+    close();
+    const kind = /припев|chorus|refrain|hook/i.test(label) ? 'chorus'
+      : /проигрыш|вступление|интро|аутро|соло|intro|outro|solo|interlude|instrumental|coda/i.test(label) ? 'instr'
+      : label ? 'verse' : 'none';
+    const marks = kind === 'chorus' ? '<i class="inlay"></i><i class="inlay"></i>'
+      : kind === 'instr' ? '<i class="inlay ring"></i>'
+      : kind === 'verse' ? '<i class="inlay"></i>' : '';
+    out.push(`<section class="blk ${kind}"><div class="gut" aria-hidden="true">${marks}</div><div class="bd">` + (label ? `<h3 class="sec">${esc(label)}</h3>` : ''));
+    inBlock = true; lastBlank = true;
+  };
+  for(const it of items){
+    if(it.type === 'section'){ open(it.label); continue; }
+    if(it.type === 'blank'){ if(!lastBlank){ out.push('<div class="gap"></div>'); lastBlank = true; } continue; }
+    if(!inBlock) open('');
+    lastBlank = false;
+    const st = ` style="--i:${Math.min(li++, 26)}"`;
+    if(it.type === 'chords'){
+      out.push(`<div class="ln only"${st}>` + it.tokens.map(t => t.chord ? chordBtn(t.chord, shift, acc) : `<span class="bar">${esc(t.sep)}</span>`).join('') + '</div>');
+    } else if(!it.segs.some(s => s.chord)){
+      out.push(`<div class="ln plain">${esc(it.segs.map(s => s.text).join(''))}</div>`);
+    } else {
+      out.push(`<div class="ln"${st}>` + it.segs.map(s =>
+        `<span class="sg">${s.chord ? chordBtn(s.chord, shift, acc) : '<span class="ch ph"></span>'}<span class="tx">${esc(nb(s.text))}</span></span>`
+      ).join('') + '</div>');
+    }
+  }
+  close();
+  return out.join('');
+}
+
+/* ───────── state ───────── */
+const row = (...pairs) => { let s = ''; for(const [col, ch] of pairs){ s = s.padEnd(col, ' ') + ch; } return s; };
+const DEMO_TEXT = [
+  '[Вступление]',
+  'Am   G   F   E   x2',
+  '',
+  '[Куплет 1]',
+  '[Am]Тихо гаснет [G]над рекой закат,',
+  '[F]Тёплый дым ползёт [E]к облакам.',
+  '[Am]Ты возьми гитару, [G]друг, и в лад',
+  '[F]Подпевай ночным [E]огням.',
+  '',
+  '[Припев]',
+  row([0, 'Am'], [10, 'G']),
+  'Пой, пока горит костёр,',
+  row([0, 'F'], [7, 'E']),
+  'Струны держат разговор.',
+  row([0, 'Am'], [16, 'G']),
+  'Каждый аккорд — как шаг вперёд,',
+  row([0, 'F'], [10, 'E'], [14, 'Am']),
+  'И рассвет уже зовёт.',
+  '',
+  '[Проигрыш]',
+  'Am  G  F  E  Am'
+].join('\n');
+
+let songs = store.get('sb.songs', null);
+if(!Array.isArray(songs) || !songs.length){
+  songs = [{id:'demo', title:'Пример: костёр и гитара', artist:'Демо, текст написан для примера', text: DEMO_TEXT, shift:0, capo:0}];
+}
+songs = songs.map(s => ({ id: s.id || uid(), title: s.title || '', artist: s.artist || '', text: s.text || '', shift: +s.shift || 0, capo: +s.capo || 0 }));
+let activeId = store.get('sb.active', songs[0].id);
+if(!songs.some(s => s.id === activeId)) activeId = songs[0].id;
+const ui = Object.assign({theme:'dark', size:24, chords:true, diagrams:true, speed:4, acc:'auto', wake:false}, store.get('sb.ui', {}));
+ui.size = clamp(+ui.size || 24, 14, 48);
+ui.speed = clamp(+ui.speed || 4, 1, 12);
+if(!NAMES[ui.acc]) ui.acc = 'auto';
+let mode = 'view';
+let wl = null;
+const cur = () => songs.find(s => s.id === activeId) || songs[0];
+
+function flush(){ store.set('sb.songs', songs); store.set('sb.active', activeId); store.set('sb.ui', ui); }
+const save = (() => { let t; return () => { clearTimeout(t); t = setTimeout(flush, 300); }; })();
+window.addEventListener('pagehide', flush);
+
+/* ───────── rendering ───────── */
+function applyTheme(){
+  document.documentElement.dataset.theme = ui.theme === 'light' ? 'light' : 'dark';
+  setIcon($('#btnTheme'), ui.theme === 'light' ? 'moon' : 'sun');
+  const m = $('meta[name="theme-color"]');
+  if(m) m.setAttribute('content', ui.theme === 'light' ? '#f2f3f0' : '#1c120d');
+}
+function applySize(){ document.documentElement.style.setProperty('--lyric', ui.size + 'px'); }
+
+function renderList(){
+  $('#songList').innerHTML = songs.map(s =>
+    `<li><button class="song-item" type="button" data-id="${esc(s.id)}"${s.id === activeId ? ' aria-current="true"' : ''}><span class="si-t">${esc(s.title || 'Без названия')}</span><span class="si-a">${esc(s.artist || 'без исполнителя')}</span></button></li>`
+  ).join('');
+}
+
+function renderView(){
+  const s = cur();
+  const eff = s.shift - s.capo;       // какие формы аккордов реально играем
+  $('#vTitle').textContent = s.title || 'Без названия';
+  const art = $('#vArtist');
+  art.textContent = s.artist || '';
+  art.hidden = !s.artist;
+  const song = $('#song');
+  song.innerHTML = s.text.trim()
+    ? songHtml(s.text, eff, ui.acc)
+    : '<p class="empty">Здесь пока пусто. Открой «Править» и вставь текст песни. Аккорды можно писать в скобках прямо в строке или отдельной строкой над текстом.</p>';
+  song.classList.toggle('nochords', !ui.chords);
+
+  const used = [];
+  $$('.ch[data-ch]', song).forEach(el => { if(!used.includes(el.dataset.ch)) used.push(el.dataset.ch); });
+
+  const chips = [];
+  if(s.shift) chips.push(`<span class="chip hot">Транспонирование <b>${s.shift > 0 ? '+' : ''}${s.shift}</b></span>`);
+  if(s.capo) chips.push(`<span class="chip hot">Капо <b>${s.capo}</b> лад, показаны формы для игры с капо</span>`);
+  if(used.length) chips.push(`<span class="chip">Аккордов в песне <b>${used.length}</b></span>`);
+  const meta = $('#vMeta');
+  meta.innerHTML = chips.join('');
+  meta.hidden = !chips.length;
+
+  const hint = $('#vHint');
+  hint.hidden = s.id !== 'demo';
+  hint.textContent = 'Это пример: вступление, куплет, припев и проигрыш. Свою песню добавь через меню слева: «Новая песня», затем вставь текст и аккорды в режиме «Править».';
+
+  const strip = $('#chordStrip');
+  strip.innerHTML = used.map(n => `<button class="mini" type="button" data-ch="${esc(n)}"><span class="nm">${esc(n)}</span>${diagramHtml(n)}</button>`).join('');
+  strip.hidden = !(ui.diagrams && used.length);
+}
+function updatePreview(){
+  const s = cur();
+  $('#preview').innerHTML = s.text.trim() ? songHtml(s.text, 0, 'auto') : '<p class="empty">Предпросмотр появится здесь.</p>';
+}
+function renderEdit(){
+  const s = cur();
+  $('#fTitle').value = s.title;
+  $('#fArtist').value = s.artist;
+  $('#fText').value = s.text;
+  updatePreview();
+}
+function syncDock(){
+  const s = cur();
+  $('#trVal').textContent = (s.shift > 0 ? '+' : '') + s.shift;
+  $('#cpVal').textContent = s.capo;
+  $('#szVal').textContent = ui.size;
+  $('#speed').value = ui.speed;
+  $('#btnChords').classList.toggle('on', ui.chords);
+  $('#btnDiag').classList.toggle('on', ui.diagrams);
+  $('#btnWake').classList.toggle('on', !!wl);
+  const accTxt = {auto:'♯♭', sharp:'♯', flat:'♭'}[ui.acc];
+  $('#btnAcc').textContent = accTxt;
+  $('#btnAcc').classList.toggle('on', ui.acc !== 'auto');
+}
+function setMode(m){
+  mode = m;
+  $('#viewPane').hidden = m !== 'view';
+  $('#editPane').hidden = m !== 'edit';
+  $('#dock').hidden = m !== 'view';
+  $('#tabPlay').setAttribute('aria-selected', String(m === 'view'));
+  $('#tabEdit').setAttribute('aria-selected', String(m === 'edit'));
+  stopScroll();
+  closeCard();
+  if(m === 'view') renderView(); else renderEdit();
+  syncDock();
+  window.scrollTo(0, 0);
+}
+
+/* ───────── chord popup ───────── */
+function openCard(name){
+  const r = shapeFor(name);
+  $('#ccName').textContent = name;
+  const notes = [];
+  if(r && r.approx) notes.push('упрощённая схема');
+  if(r && r.bass) notes.push('бас ' + r.bass);
+  $('#ccBody').innerHTML = (r ? diagramSvg(r.shape) : '<div class="nodiag">нет схемы для этого аккорда</div>')
+    + (notes.length ? `<div class="cc-note">${esc(notes.join(', '))}</div>` : '');
+  $('#chordCard').hidden = false;
+}
+function closeCard(){ $('#chordCard').hidden = true; }
+
+/* ───────── drawer, toast ───────── */
+function toggleDrawer(on){
+  const d = $('#drawer');
+  d.classList.toggle('open', on);
+  $('#scrim').classList.toggle('show', on);
+  d.inert = !on;
+  d.setAttribute('aria-hidden', String(!on));
+}
+let toastT;
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ───────── auto-scroll ───────── */
+let scrolling = false, raf = 0, lastT = 0, carry = 0;
+const pxPerSec = () => 4 + ui.speed * 4;
+function updScrollBtn(){
+  setIcon($('#scrollIco'), scrolling ? 'pause' : 'play');
+  $('#scrollTxt').textContent = scrolling ? 'Стоп' : 'Прокрутка';
+  $('#btnScroll').classList.toggle('on', scrolling);
+}
+function tick(t){
+  if(!scrolling) return;
+  const dt = Math.min(80, t - lastT);
+  lastT = t;
+  carry += dt / 1000 * pxPerSec();
+  const whole = Math.floor(carry);
+  if(whole > 0){ window.scrollBy(0, whole); carry -= whole; }
+  if(window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2){ stopScroll(); return; }
+  raf = requestAnimationFrame(tick);
+}
+function startScroll(){
+  if(scrolling) return;
+  scrolling = true; carry = 0; lastT = performance.now();
+  raf = requestAnimationFrame(tick);
+  updScrollBtn();
+}
+function stopScroll(){
+  scrolling = false;
+  cancelAnimationFrame(raf);
+  updScrollBtn();
+}
+
+/* ───────── screen wake lock ───────── */
+async function setWake(on){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    if(on){
+      wl = await navigator.wakeLock.request('screen');
+      wl.addEventListener('release', () => { wl = null; syncDock(); });
+    } else if(wl){
+      await wl.release();
+      wl = null;
+    }
+  }catch(e){
+    wl = null;
+    if(on) toast('Браузер не разрешил держать экран включённым');
+  }
+  syncDock();
+}
+
+/* ───────── files ───────── */
+function download(name, text){
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function insertAtCursor(t, ownLine){
+  const ta = $('#fText');
+  const a = ta.selectionStart, b = ta.selectionEnd;
+  const pre = ownLine && a > 0 && ta.value[a - 1] !== '\n' ? '\n' : '';
+  ta.setRangeText(pre + t, a, b, 'end');
+  ta.focus();
+  ta.dispatchEvent(new Event('input', {bubbles:true}));
+}
+
+/* ───────── events ───────── */
+$$('[data-icon]').forEach(el => setIcon(el, el.dataset.icon));
+
+$('#btnLib').onclick = () => toggleDrawer(true);
+$('#btnLibClose').onclick = () => toggleDrawer(false);
+$('#scrim').onclick = () => toggleDrawer(false);
+$('#tabPlay').onclick = () => setMode('view');
+$('#tabEdit').onclick = () => setMode('edit');
+$('#btnTheme').onclick = () => { ui.theme = ui.theme === 'light' ? 'dark' : 'light'; applyTheme(); save(); };
+
+$('#songList').addEventListener('click', e => {
+  const b = e.target.closest('.song-item');
+  if(!b) return;
+  activeId = b.dataset.id;
+  save(); renderList(); toggleDrawer(false); setMode(mode);
+});
+$('#btnNew').onclick = () => {
+  const s = {id: uid(), title:'Новая песня', artist:'', text:'', shift:0, capo:0};
+  songs.push(s); activeId = s.id;
+  save(); renderList(); toggleDrawer(false); setMode('edit');
+  const t = $('#fTitle'); t.focus(); t.select();
+};
+$('#btnExport').onclick = () => {
+  const s = cur();
+  download(((s.title || 'song').replace(/[\\/:*?"<>|]+/g, '').trim() || 'song') + '.txt', s.text);
+};
+$('#btnImport').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = e => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  let retried = false;
+  r.onload = () => {
+    const t = String(r.result || '');
+    if(t.includes('\ufffd') && !retried){ retried = true; r.readAsText(f, 'windows-1251'); return; }
+    const s = {id: uid(), title: f.name.replace(/\.[^.]+$/, ''), artist:'', text: t, shift:0, capo:0};
+    songs.push(s); activeId = s.id;
+    save(); renderList(); toggleDrawer(false); setMode('view'); toast('Песня добавлена');
+  };
+  r.readAsText(f);
+  e.target.value = '';
+};
+
+// editor
+$('#fTitle').addEventListener('input', e => { cur().title = e.target.value; save(); renderList(); });
+$('#fArtist').addEventListener('input', e => { cur().artist = e.target.value; save(); renderList(); });
+let pvT;
+$('#fText').addEventListener('input', e => { cur().text = e.target.value; save(); clearTimeout(pvT); pvT = setTimeout(updatePreview, 120); });
+const INS = {verse:'[Куплет]\n', chorus:'[Припев]\n', instr:'[Проигрыш]\n'};
+$$('[data-ins]').forEach(b => b.onclick = () => insertAtCursor(INS[b.dataset.ins], true));
+$('#btnPaste').onclick = async () => {
+  try{
+    const t = await navigator.clipboard.readText();
+    if(!t) { toast('Буфер пуст'); return; }
+    insertAtCursor(t, false);
+  }catch(e){ toast('Нет доступа к буферу. Вставь текст вручную: Ctrl+V'); }
+};
+$('#btnDelete').onclick = () => {
+  const s = cur();
+  if(!confirm('Удалить «' + (s.title || 'Без названия') + '»?')) return;
+  songs = songs.filter(x => x.id !== s.id);
+  if(!songs.length) songs.push({id: uid(), title:'Новая песня', artist:'', text:'', shift:0, capo:0});
+  activeId = songs[0].id;
+  save(); renderList(); setMode('edit');
+};
+
+// dock
+const bump = (key, d, lo, hi) => { const s = cur(); s[key] = clamp((s[key] || 0) + d, lo, hi); save(); renderView(); syncDock(); };
+$('#trDown').onclick = () => bump('shift', -1, -11, 11);
+$('#trUp').onclick   = () => bump('shift', +1, -11, 11);
+$('#cpDown').onclick = () => bump('capo', -1, 0, 11);
+$('#cpUp').onclick   = () => bump('capo', +1, 0, 11);
+$('#szDown').onclick = () => { ui.size = clamp(ui.size - 2, 14, 48); applySize(); save(); syncDock(); };
+$('#szUp').onclick   = () => { ui.size = clamp(ui.size + 2, 14, 48); applySize(); save(); syncDock(); };
+$('#btnScroll').onclick = () => scrolling ? stopScroll() : startScroll();
+$('#speed').oninput = e => { ui.speed = +e.target.value; save(); };
+$('#btnChords').onclick = () => { ui.chords = !ui.chords; $('#song').classList.toggle('nochords', !ui.chords); save(); syncDock(); };
+$('#btnDiag').onclick = () => { ui.diagrams = !ui.diagrams; save(); renderView(); syncDock(); };
+$('#btnAcc').onclick = () => {
+  ui.acc = {auto:'sharp', sharp:'flat', flat:'auto'}[ui.acc];
+  save(); renderView(); syncDock();
+  toast({auto:'Диезы и бемоли: автоматически', sharp:'Только диезы ♯', flat:'Только бемоли ♭'}[ui.acc]);
+};
+$('#btnWake').onclick = async () => { ui.wake = !ui.wake; await setWake(ui.wake); if(!wl) ui.wake = false; save(); syncDock(); };
+$('#btnPrint').onclick = () => window.print();
+['wheel', 'touchmove'].forEach(ev => $('#sheet').addEventListener(ev, () => { if(scrolling) stopScroll(); }, {passive:true}));
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden') flush();
+  else if(ui.wake && !wl) setWake(true);
+});
+
+// chords: tap to see the fingering
+document.addEventListener('click', e => {
+  const c = e.target.closest('.ch[data-ch], .mini[data-ch]');
+  if(c){
+    const name = c.dataset.ch;
+    if(!$('#chordCard').hidden && $('#ccName').textContent === name) closeCard(); else openCard(name);
+    return;
+  }
+  if(!e.target.closest('#chordCard')) closeCard();
+});
+$('#ccClose').onclick = closeCard;
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){ toggleDrawer(false); closeCard(); return; }
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON' || t.isContentEditable)) return;
+  if(e.metaKey || e.ctrlKey || e.altKey || mode !== 'view') return;
+  if(e.key === ' '){ e.preventDefault(); scrolling ? stopScroll() : startScroll(); }
+  else if(e.key === '+' || e.key === '='){ bump('shift', +1, -11, 11); }
+  else if(e.key === '-' || e.key === '_'){ bump('shift', -1, -11, 11); }
+});
+
+/* ───────── start ───────── */
+if(!('wakeLock' in navigator)) $('#btnWake').hidden = true;
+applyTheme();
+applySize();
+renderList();
+toggleDrawer(false);
+updScrollBtn();
+document.body.classList.add('boot');
+setMode('view');
+setTimeout(() => document.body.classList.remove('boot'), 1600);
+if(ui.wake) setWake(true);
+})();
+</script>
+</body>
+</html>

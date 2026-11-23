@@ -376,3 +376,360 @@ function drawRain() {
       if (row < 0 || row > rows) continue;
       cx.globalAlpha = k === 0 ? .95 : .5 * (1 - k / c.len);
       cx.fillStyle = k === 0 ? "#eafff3" : (k < 3 ? "#5dffa0" : "#12b45a");
+      cx.fillText(c.ch[((row % 64) + 64) % 64], c.x, row * FS);
+    }
+  }
+  cx.globalAlpha = 1;
+}
+
+function resize() {
+  cv.width = innerWidth; cv.height = innerHeight;
+  stars = Array.from({ length: Math.min(260, Math.floor(cv.width * cv.height / 7000)) }, () => ({
+    x: Math.random() * cv.width, y: Math.random() * cv.height,
+    z: Math.random() * 1.6 + .3, p: Math.random() * 6.28 }));
+  initRain();
+}
+addEventListener("resize", resize); resize();
+const hues = [185, 270, 330];
+function burst(x, y, n, speed) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.283, s = Math.random() * speed;
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, h: hues[(Math.random() * 3) | 0] });
+  }
+}
+addEventListener("pointermove", e => {
+  pmx = mx; pmy = my; mx = e.clientX; my = e.clientY;
+  burst(mx, my, 1, .8);
+  const tl = $("tilt");
+  tl.style.transform = `rotateX(${((my / innerHeight) - .5) * -9}deg) rotateY(${((mx / innerWidth) - .5) * 11}deg)`;
+});
+addEventListener("pointerdown", e => burst(e.clientX, e.clientY, 26, 4.5));
+let bass = 0;
+function loop(t) {
+  cx.clearRect(0, 0, cv.width, cv.height);
+  drawRain();
+  const ox = (mx - cv.width / 2) * .012, oy = (my - cv.height / 2) * .012;
+  for (const s of stars) {
+    s.y += s.z * (.15 + bass * 1.2); if (s.y > cv.height) { s.y = 0; s.x = Math.random() * cv.width; }
+    cx.globalAlpha = .35 + .65 * Math.abs(Math.sin(t / 900 + s.p));
+    cx.fillStyle = "#cfe8ff";
+    cx.fillRect(s.x - ox * s.z, s.y - oy * s.z, s.z + bass * 1.2, s.z + bass * 1.2);
+  }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.x += p.vx; p.y += p.vy; p.vy += .03; p.life -= .02;
+    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    cx.globalAlpha = p.life; cx.fillStyle = `hsl(${p.h} 100% 65%)`;
+    cx.beginPath(); cx.arc(p.x, p.y, 1.2 + p.life * 2, 0, 6.283); cx.fill();
+  }
+  cx.globalAlpha = 1;
+  drawEq(t);
+  requestAnimationFrame(loop);
+}
+/* запуск после полной инициализации скрипта (иначе TDZ-ошибка на const/let ниже) */
+addEventListener("load", () => requestAnimationFrame(loop));
+
+/* ---------- музыка (Web Audio, синтез в реальном времени) ---------- */
+let ac, master, bus, dbus, analyser, noiseBuf, schedTimer, playing = false, started = false;
+let vol = .55, nextBar = 0, barIdx = 0, useFile = false, mediaSrc = null;
+const musicReady = fetch("/api/music", { cache: "no-store" }).then(r => r.json()).then(j => {
+  if (j.has) { useFile = true; $("track").src = "/music"; $("np-title").textContent = j.title.toUpperCase(); }
+  else { $("foot").innerHTML = "трек не найден: положи <b>baldinini.mp3</b> рядом со server.py — пока играет синтвейв"; }
+}).catch(() => {});
+const BPM = 96, beat = 60 / BPM, bar = beat * 4;
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const PADS = [[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62]];
+const ROOTS = [45, 41, 48, 43];
+const ARP = [0, 1, 2, 1, 0, 1, 2, 4];
+
+function impulse(sec) {
+  const r = ac.sampleRate, l = r * sec, b = ac.createBuffer(2, l, r);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < l; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / l, 2.6); }
+  return b;
+}
+function tone(o) {
+  const osc = ac.createOscillator(), g = ac.createGain(), fl = ac.createBiquadFilter();
+  osc.type = o.type; osc.frequency.value = o.f; if (o.det) osc.detune.value = o.det;
+  fl.type = "lowpass"; fl.frequency.value = o.lp || 2000; fl.Q.value = o.q || .7;
+  const a = o.a || .01, r = o.r || .1;
+  g.gain.setValueAtTime(0, o.t);
+  g.gain.linearRampToValueAtTime(o.v, o.t + a);
+  g.gain.setValueAtTime(o.v, o.t + Math.max(a, o.d));
+  g.gain.linearRampToValueAtTime(0, o.t + o.d + r);
+  osc.connect(fl); fl.connect(g); g.connect(o.out || bus);
+  osc.start(o.t); osc.stop(o.t + o.d + r + .05);
+}
+function kick(t) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + .16);
+  g.gain.setValueAtTime(.9, t); g.gain.exponentialRampToValueAtTime(.001, t + .35);
+  o.connect(g); g.connect(dbus); o.start(t); o.stop(t + .4);
+}
+function hat(t, v) {
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = noiseBuf; f.type = "highpass"; f.frequency.value = 7500;
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + .06);
+  s.connect(f); f.connect(g); g.connect(dbus); s.start(t, Math.random() * .5); s.stop(t + .08);
+}
+function snare(t) {
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = noiseBuf; f.type = "bandpass"; f.frequency.value = 1800; f.Q.value = .8;
+  g.gain.setValueAtTime(.35, t); g.gain.exponentialRampToValueAtTime(.001, t + .22);
+  s.connect(f); f.connect(g); g.connect(bus); g.connect(dbus); s.start(t, Math.random() * .5); s.stop(t + .25);
+}
+function playBar(t, i) {
+  const pad = PADS[i], root = ROOTS[i], sweep = 900 + 700 * Math.sin(barIdx * .5);
+  pad.forEach(n => {
+    tone({ type: "sawtooth", f: mtof(n), t, d: bar * .96, v: .045, lp: sweep, a: .7, r: 1.2, det: -9 });
+    tone({ type: "sawtooth", f: mtof(n), t, d: bar * .96, v: .045, lp: sweep, a: .7, r: 1.2, det: 9 });
+  });
+  for (let k = 0; k < 8; k++) {
+    const bt = t + k * beat / 2;
+    tone({ type: "sawtooth", f: mtof(root), t: bt, d: beat / 2 * .8, v: k % 2 ? .13 : .2, lp: 420, a: .005, r: .08, out: dbus });
+    const n = (k < 7 ? pad[ARP[k] % 3] : pad[1]) + 12 + (ARP[k] > 2 ? 12 : 0);
+    tone({ type: "triangle", f: mtof(n), t: bt, d: beat / 2 * .7, v: .07, lp: 3200, a: .005, r: .25 });
+  }
+  for (let b = 0; b < 4; b++) {
+    kick(t + b * beat);
+    hat(t + b * beat + beat / 2, .1);
+    if (b === 1 || b === 3) snare(t + b * beat);
+  }
+  for (let k = 0; k < 8; k += 2) hat(t + k * beat / 2 + beat / 4, .035);
+}
+function sched() {
+  while (nextBar < ac.currentTime + 1.4) { playBar(nextBar, barIdx % 4); nextBar += bar; barIdx++; }
+}
+function fileFailed(why) {
+  if (!useFile) return;
+  useFile = false;
+  $("np-title").textContent = "MANERA — live synthwave";
+  $("foot").textContent = "файл трека не воспроизводится (" + why + ") — играет синтвейв";
+  if (playing) { started = false; play(); }
+}
+$("track").addEventListener("error", () => fileFailed("формат/повреждён"));
+
+function initAudio() {
+  if (ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = ac.createDynamicsCompressor();
+  master = ac.createGain(); master.gain.value = 0;
+  analyser = ac.createAnalyser(); analyser.fftSize = 128; analyser.smoothingTimeConstant = .8;
+  const conv = ac.createConvolver(); conv.buffer = impulse(2.8);
+  const wet = ac.createGain(); wet.gain.value = .45;
+  bus = ac.createGain(); dbus = ac.createGain();
+  bus.connect(conv); bus.connect(comp); conv.connect(wet); wet.connect(comp); dbus.connect(comp);
+  comp.connect(master); master.connect(analyser); analyser.connect(ac.destination);
+  mediaSrc = ac.createMediaElementSource($("track")); mediaSrc.connect(dbus);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+function play() {
+  initAudio(); ac.resume();
+  if (useFile) { $("track").play().catch(e => { if (e && e.name !== "NotAllowedError" && e.name !== "AbortError") fileFailed(e.name); }); }
+  else {
+    if (!started) { nextBar = ac.currentTime + .15; started = true; }
+    clearInterval(schedTimer); schedTimer = setInterval(sched, 250); sched();
+  }
+  master.gain.cancelScheduledValues(ac.currentTime);
+  master.gain.setValueAtTime(master.gain.value, ac.currentTime);
+  master.gain.linearRampToValueAtTime(vol, ac.currentTime + 2.5);
+  playing = true; $("play").textContent = "❚❚"; $("state").textContent = "играет";
+}
+function pause() {
+  if (!ac) return;
+  master.gain.cancelScheduledValues(ac.currentTime);
+  master.gain.setValueAtTime(master.gain.value, ac.currentTime);
+  master.gain.linearRampToValueAtTime(0, ac.currentTime + .6);
+  clearInterval(schedTimer);
+  setTimeout(() => { if (!playing) { $("track").pause(); ac.suspend(); started = false; } }, 800);
+  playing = false; $("play").textContent = "▶"; $("state").textContent = "пауза";
+}
+$("play").onclick = () => { if (playing) { userPaused = true; pause(); } else { userPaused = false; play(); } };
+$("vol").oninput = e => {
+  vol = e.target.value / 100; $("volv").textContent = e.target.value + "%";
+  if (ac && playing) master.gain.setTargetAtTime(vol, ac.currentTime, .05);
+};
+
+/* ---------- эквалайзер + реакция на бас ---------- */
+const eq = $("eq"), ex = eq.getContext("2d");
+function drawEq(t) {
+  const w = eq.width, h = eq.height, n = 36, bw = w / n;
+  ex.clearRect(0, 0, w, h);
+  let data = null;
+  if (analyser && playing) { data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data); }
+  const g = ex.createLinearGradient(0, h, 0, 0);
+  g.addColorStop(0, "#39d0e0"); g.addColorStop(.6, "#c49bff"); g.addColorStop(1, "#ff5ea8");
+  ex.fillStyle = g;
+  for (let i = 0; i < n; i++) {
+    const v = data ? data[Math.min(63, Math.floor(i * 1.5))] / 255 : .06 + .04 * Math.sin(t / 400 + i * .6);
+    const bh = Math.max(2, v * h);
+    ex.fillRect(i * bw + 1, h - bh, bw - 2, bh);
+  }
+  let b = 0;
+  if (data) { b = (data[0] + data[1] + data[2] + data[3]) / (4 * 255); b = Math.pow(b, 2.2); }
+  bass += (b - bass) * .25;
+  document.documentElement.style.setProperty("--pulse", bass.toFixed(3));
+}
+
+/* ---------- запуск: сразу, без заставки ---------- */
+let userPaused = false;
+setTimeout(() => document.body.classList.add("in"), 100);
+$("state").textContent = "нажми куда угодно ♪";
+
+async function tryAuto() {            // автоплей, если браузер разрешает
+  await musicReady;
+  try { initAudio(); await ac.resume(); } catch (e) {}
+  if (ac && ac.state === "running" && !userPaused && !playing) play();
+}
+function unlock() {                   // иначе — по первому клику/тапу/клавише
+  if (!userPaused && !playing) { initAudio(); ac.resume(); musicReady.then(play); }
+  ["pointerdown", "keydown", "touchstart"].forEach(ev => removeEventListener(ev, unlock));
+}
+["pointerdown", "keydown", "touchstart"].forEach(ev => addEventListener(ev, unlock));
+tryAuto();
+document.addEventListener("visibilitychange", () => { if (ac && playing) { document.hidden ? ac.suspend() : ac.resume(); } });
+</script>
+</body>
+</html>"""
+
+
+def build_html():
+    return (HTML.replace("__LOGO__", LOGO)
+                .replace("__TG__", TELEGRAM_URL).replace("__TGU__", TELEGRAM_USER)
+                .replace("__TT__", TIKTOK_URL).replace("__TTU__", TIKTOK_USER)
+                .replace("__GT__", SONGBOOK_PATH)
+                .replace("__BTC__", btc_text())
+                .replace("__MAP__", json.dumps(WORLD_MAP)))
+
+
+# -------------------------------------------------------------- server ----
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        pass
+
+    def _send(self, code, ctype, body):
+        data = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_songbook(self):
+        if not os.path.isfile(SONGBOOK_FILE):
+            return self._send(404, "text/plain; charset=utf-8", "gitara-songbook.html not found")
+        try:
+            with open(SONGBOOK_FILE, "r", encoding="utf-8") as fh:
+                content = fh.read()
+        except OSError as exc:
+            return self._send(500, "text/plain; charset=utf-8", f"failed to read songbook: {exc}")
+        return self._send(200, "text/html; charset=utf-8", content)
+
+    def _serve_music(self):
+        f = find_music()
+        if not f:
+            return self._send(404, "text/plain", "no music file")
+        size = os.path.getsize(f)
+        start, end, code = 0, size - 1, 200
+        rng = self.headers.get("Range", "")
+        if rng.startswith("bytes="):
+            a, _, b = rng[6:].partition("-")
+            try:
+                start = int(a) if a else 0
+                end = int(b) if b else size - 1
+                code = 206
+            except ValueError:
+                start, end, code = 0, size - 1, 200
+        end = min(end, size - 1)
+        if start > end:
+            return self._send(416, "text/plain", "bad range")
+        ctype = mimetypes.guess_type(f)[0] or "audio/mpeg"
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if code == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        try:
+            with open(f, "rb") as fh:
+                fh.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = fh.read(min(65536, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+
+    def do_GET(self):
+        path = self.path.split("?")[0]
+
+        if path == "/healthz":
+            return self._send(200, "text/plain", "ok")
+        if path == SONGBOOK_PATH or path == "/songbook":
+            return self._serve_songbook()
+        if path == "/api/btc":
+            return self._send(200, "application/json", json.dumps({"text": btc_text()}))
+        if path == "/api/music":
+            f = find_music()
+            title = os.path.splitext(os.path.basename(f))[0] if f else ""
+            return self._send(200, "application/json",
+                              json.dumps({"has": bool(f), "title": title}, ensure_ascii=False))
+        if path == "/music":
+            return self._serve_music()
+        if path != "/":
+            return self._send(404, "text/plain; charset=utf-8", "404 not found")
+
+        if "curl" not in self.headers.get("User-Agent", "").lower():
+            return self._send(200, "text/html; charset=utf-8", build_html())
+
+        # curl: бесконечный ASCII-стрим
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        step = 0
+        try:
+            self.wfile.write(b"\033[?25l")
+            while True:
+                color = LOGO_COLORS[(step // 3) % len(LOGO_COLORS)]
+                info = (
+                    f"  {CYAN}✈ Telegram:{RESET}  {BOLD}@{TELEGRAM_USER}{RESET}  ({TELEGRAM_URL})\n"
+                    f"  {MAGENTA}♪ TikTok:{RESET}    {BOLD}@{TIKTOK_USER}{RESET}  ({TIKTOK_URL})\n"
+                    f"  {YELLOW}₿ Bitcoin:{RESET}   {BOLD}{btc_text()}{RESET}\n"
+                    f"  {GREEN}⌚ Время BY:{RESET}  {minsk_time()}\n"
+                )
+                frame = (
+                    "\033[2J\033[H"
+                    f"{color}{LOGO}{RESET}\n"
+                    f"{EARTH_FRAMES[step % len(EARTH_FRAMES)]}\n\n"
+                    f"{info}\n{DIM}Ctrl+C — выход{RESET}\n"
+                )
+                self.wfile.write(frame.encode("utf-8"))
+                self.wfile.flush()
+                step += 1
+                time.sleep(0.12)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+
+
+if __name__ == "__main__":
+    threading.Thread(target=btc_worker, daemon=True).start()
+    port = int(os.environ.get("PORT", 8080))
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    server.daemon_threads = True
+    mf = find_music()
+    if mf:
+        print(f"Музыка: {mf} ({os.path.getsize(mf) // 1024} КБ)")
+    else:
+        print(f"Музыка НЕ найдена. Положи baldinini.mp3 в папку: {BASE_DIR}")
+    if os.path.isfile(SONGBOOK_FILE):
+        print(f"Songbook: {SONGBOOK_FILE}")
+    else:
+        print(f"ВНИМАНИЕ: {SONGBOOK_FILE} не найден!")
+    print(f"Server started on port {port}")
+    server.serve_forever()

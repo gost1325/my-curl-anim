@@ -217,7 +217,7 @@ HTML = r"""<!DOCTYPE html>
   .typed::after { content:'▌'; animation:blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity:0; } }
 
-  .links { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
+  .links { position:relative; z-index:5; display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin-bottom:12px; }
   .btn { position:relative; overflow:hidden; display:block; text-decoration:none; text-align:center; padding:14px 8px;
          border-radius:12px; border:1px solid var(--line); background:#0a0f16; color:var(--txt);
          font-weight:bold; font-size:14px; transition:transform .18s, box-shadow .18s, border-color .18s; }
@@ -247,7 +247,6 @@ HTML = r"""<!DOCTYPE html>
   input[type=range] { flex:1; accent-color:var(--cy); height:4px; }
   .foot { margin-top:12px; font-size:11px; color:var(--mut); text-align:center; }
 
-  @media (max-width:520px) { .links { grid-template-columns:1fr; } }
   @media (max-width:420px) { #logo { font-size:9px; } #earth { font-size:11px; } }
   @media (prefers-reduced-motion:reduce) { .nebula,.terminal,.glitch::before,.glitch::after { animation:none; } }
 </style>
